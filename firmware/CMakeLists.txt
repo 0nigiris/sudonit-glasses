@@ -23,10 +23,12 @@ add_compile_options(-Wall -Wextra -Werror)
 # The ESP-IDF build will select the esp32 backends instead (same headers).
 set(SUDONIT_HAL_BACKEND "mock" CACHE STRING "HAL backend: mock | esp32")
 
-# --- core + HAL (mock peripherals, host TCP transport) ---
+# --- core + config + HAL (mock peripherals, host TCP transport) ---
 set(CORE_SRC
     src/core/error.c
-    src/core/log.c)
+    src/core/log.c
+    src/config/config.c
+    src/config/config_store_host.c)
 
 set(HAL_SRC
     src/hal/mock/camera_mock.c
@@ -68,3 +70,7 @@ find_package(Threads REQUIRED)
 add_executable(test_protocol test/test_protocol.c)
 target_link_libraries(test_protocol sudonit_fw Threads::Threads)
 add_test(NAME protocol COMMAND test_protocol)
+
+add_executable(test_config test/test_config.c)
+target_link_libraries(test_config sudonit_fw)
+add_test(NAME config COMMAND test_config)

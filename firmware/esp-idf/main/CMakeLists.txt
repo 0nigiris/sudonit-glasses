@@ -12,6 +12,9 @@ idf_component_register(
         # core
         "../../src/core/error.c"
         "../../src/core/log.c"
+        # configuration (shared module + NVS backend)
+        "../../src/config/config.c"
+        "../../src/config/config_store_nvs.c"
         # device application (hardware-agnostic)
         "../../src/app/device.c"
         # ESP32 HAL backends (stubs until drivers land)
@@ -29,4 +32,6 @@ idf_component_register(
         "."
         "../../include"
         "../../src/app"
-        "../../components/protocol/include")
+        "../../components/protocol/include"
+    PRIV_REQUIRES
+        nvs_flash)

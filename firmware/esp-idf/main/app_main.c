@@ -6,7 +6,10 @@
  * so the capture cycle is expected to report an unsupported peripheral until
  * the real drivers land — that's the demonstration, not a failure.
  */
+#include "nvs_flash.h"
+
 #include "device.h"
+#include "sudonit/config.h"
 #include "sudonit/hal/audio.h"
 #include "sudonit/hal/battery.h"
 #include "sudonit/hal/camera.h"
@@ -22,6 +25,23 @@ void app_main(void) {
     SD_LOGI(TAG, "HAL backends: camera=%s battery=%s audio=%s mic=%s",
             sd_camera_backend(), sd_battery_backend(), sd_audio_backend(),
             sd_mic_backend());
+
+    /* NVS backs the configuration store; initialize it before loading config. */
+    esp_err_t nv = nvs_flash_init();
+    if (nv == ESP_ERR_NVS_NO_FREE_PAGES || nv == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+
+    sd_config_t cfg;
+    sd_config_load(&cfg);
+    /* Never log the password — report only whether it is set. */
+    SD_LOGI(TAG, "config: device=%s server=%s:%u ssid=%s password=%s",
+            cfg.device_name,
+            cfg.server_host[0] ? cfg.server_host : "(unset)",
+            (unsigned)cfg.server_port,
+            cfg.wifi_ssid[0] ? cfg.wifi_ssid : "(unset)",
+            cfg.wifi_password[0] ? "(set)" : "(unset)");
 
     sd_err_t err = sd_device_init();
     SD_LOGI(TAG, "device init: %s", sd_strerror(err));
