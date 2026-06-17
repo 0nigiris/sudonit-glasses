@@ -1,0 +1,13 @@
+# Sudonit firmware — ESP-IDF default configuration (ESP32-S3 N16R8).
+# Generated sdkconfig is gitignored; these defaults are the checked-in source.
+
+# 16 MB flash (N16R8).
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# Custom partition layout (see partitions.csv).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# 8 MB octal PSRAM (N16R8) — required for camera frame buffers.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y

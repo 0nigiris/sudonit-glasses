@@ -14,6 +14,13 @@ venv/
 # Firmware host build output
 firmware/build/
 
+# ESP-IDF build output and generated config
+firmware/esp-idf/build/
+firmware/esp-idf/sdkconfig
+firmware/esp-idf/sdkconfig.old
+firmware/esp-idf/managed_components/
+firmware/esp-idf/dependencies.lock
+
 # Secrets — never commit
 .env
 *.key

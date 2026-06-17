@@ -1,0 +1,16 @@
+# Wokwi simulation config (scaffolding).
+#
+# Lets the firmware boot in the Wokwi ESP32-S3 simulator for a no-hardware smoke
+# test (boot + serial logs). Running it requires the Wokwi CLI and a free
+# WOKWI_CLI_TOKEN:
+#
+#   curl -L https://wokwi.com/ci/install.sh | sh
+#   export WOKWI_CLI_TOKEN=...           # from https://wokwi.com (free)
+#   idf.py -C firmware/esp-idf build
+#   wokwi-cli firmware/esp-idf           # uses this file + diagram.json
+#
+# Paths are relative to this directory (the build output of project sudonit_glasses).
+[wokwi]
+version = 1
+firmware = "build/sudonit_glasses.bin"
+elf = "build/sudonit_glasses.elf"
