@@ -36,11 +36,42 @@ Completion Date:
 
 Status:
 
-PENDING
+COMPLETED
+
+Completion Date:
+
+2026-06-17
 
 Description:
 
-Initial project structure created.
+Initial project structure created and published to GitHub
+(github.com/0nigiris/sudonit-glasses, public, Apache-2.0). Includes the source-
+of-truth docs, the shared protocol layer, the phone-brain prototype, the glasses
+simulator, and a passing test suite.
+
+---
+
+## First Simulated Loop
+
+Status:
+
+COMPLETED
+
+Completion Date:
+
+2026-06-17
+
+Description:
+
+The full V1 loop runs end-to-end with no hardware:
+capture image -> chunked transport (SHA-256 verified) -> AI provider -> text ->
+audio. Driven by the glasses simulator against the phone-brain server over TCP
+(the Wi-Fi data-plane stand-in). Runs on a deterministic stub provider by
+default and on real Claude vision when ANTHROPIC_API_KEY is set.
+
+Note: this is proven in SIMULATION only. The hardware milestones below (camera
+capture, ESP32 boot, real phone connection) remain PENDING — when hardware
+arrives, only the capture source changes; the rest of the loop is already proven.
 
 ---
 
