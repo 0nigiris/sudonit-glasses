@@ -11,6 +11,9 @@ venv/
 *.wav
 *.log
 
+# Firmware host build output
+firmware/build/
+
 # Secrets — never commit
 .env
 *.key
