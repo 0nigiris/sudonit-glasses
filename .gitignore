@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Build artifacts / runtime output
+/run/
+*.wav
+*.log
+
+# Secrets — never commit
+.env
+*.key
+
+# Editor
+.vscode/
+.idea/
+
+# Generated sample (regenerate with tools/make_sample_image.py)
+simulator/sample/sample.png
