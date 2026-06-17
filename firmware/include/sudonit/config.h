@@ -11,6 +11,7 @@
 #ifndef SUDONIT_CONFIG_H
 #define SUDONIT_CONFIG_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "sudonit/error.h"
@@ -45,5 +46,16 @@ sd_err_t sd_config_load(sd_config_t *out);
 
 /* Persist `cfg` to the storage backend. */
 sd_err_t sd_config_save(const sd_config_t *cfg);
+
+/* String-keyed field access, shared by the config CLI and tests. Keys:
+ *   "device_name", "wifi_ssid", "wifi_password", "server_host", "server_port".
+ * set: validates length / numeric range; SD_ERR_INVALID on unknown key or bad
+ * value. get: writes the value as a string into `out` (port as decimal);
+ * SD_ERR_INVALID on unknown key. get returns the raw value — callers that
+ * display it are responsible for masking secrets (see the CLI).
+ */
+sd_err_t sd_config_set_field(sd_config_t *cfg, const char *key, const char *value);
+sd_err_t sd_config_get_field(const sd_config_t *cfg, const char *key, char *out,
+                             size_t cap);
 
 #endif /* SUDONIT_CONFIG_H */

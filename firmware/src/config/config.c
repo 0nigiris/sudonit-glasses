@@ -6,6 +6,8 @@
  */
 #include "sudonit/config.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "sudonit/config_store.h"
@@ -93,4 +95,64 @@ sd_err_t sd_config_save(const sd_config_t *cfg) {
     memcpy(blob, &version, VERSION_BYTES);
     memcpy(blob + VERSION_BYTES, cfg, sizeof(sd_config_t));
     return sd_config_store_write(blob, sizeof(blob));
+}
+
+/* Copy `value` into a fixed string field, rejecting anything over `maxlen`. */
+static sd_err_t set_str(char *dst, const char *value, size_t maxlen) {
+    size_t n = strlen(value);
+    if (n > maxlen) {
+        return SD_ERR_INVALID;
+    }
+    memcpy(dst, value, n);
+    dst[n] = '\0';
+    return SD_OK;
+}
+
+sd_err_t sd_config_set_field(sd_config_t *cfg, const char *key, const char *value) {
+    if (!cfg || !key || !value) {
+        return SD_ERR_INVALID;
+    }
+    if (strcmp(key, "device_name") == 0) {
+        return set_str(cfg->device_name, value, SD_NAME_MAX);
+    }
+    if (strcmp(key, "wifi_ssid") == 0) {
+        return set_str(cfg->wifi_ssid, value, SD_WIFI_SSID_MAX);
+    }
+    if (strcmp(key, "wifi_password") == 0) {
+        return set_str(cfg->wifi_password, value, SD_WIFI_PASS_MAX);
+    }
+    if (strcmp(key, "server_host") == 0) {
+        return set_str(cfg->server_host, value, SD_HOST_MAX);
+    }
+    if (strcmp(key, "server_port") == 0) {
+        char *end = NULL;
+        long v = strtol(value, &end, 10);
+        if (value[0] == '\0' || *end != '\0' || v < 1 || v > 65535) {
+            return SD_ERR_INVALID;
+        }
+        cfg->server_port = (uint16_t)v;
+        return SD_OK;
+    }
+    return SD_ERR_INVALID;
+}
+
+sd_err_t sd_config_get_field(const sd_config_t *cfg, const char *key, char *out,
+                             size_t cap) {
+    if (!cfg || !key || !out || cap == 0) {
+        return SD_ERR_INVALID;
+    }
+    if (strcmp(key, "device_name") == 0) {
+        snprintf(out, cap, "%s", cfg->device_name);
+    } else if (strcmp(key, "wifi_ssid") == 0) {
+        snprintf(out, cap, "%s", cfg->wifi_ssid);
+    } else if (strcmp(key, "wifi_password") == 0) {
+        snprintf(out, cap, "%s", cfg->wifi_password);
+    } else if (strcmp(key, "server_host") == 0) {
+        snprintf(out, cap, "%s", cfg->server_host);
+    } else if (strcmp(key, "server_port") == 0) {
+        snprintf(out, cap, "%u", (unsigned)cfg->server_port);
+    } else {
+        return SD_ERR_INVALID;
+    }
+    return SD_OK;
 }

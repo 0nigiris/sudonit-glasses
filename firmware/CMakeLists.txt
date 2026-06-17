@@ -59,6 +59,9 @@ target_link_libraries(device_demo sudonit_fw)
 add_executable(device_interop src/app/main_interop.c)
 target_link_libraries(device_interop sudonit_fw)
 
+add_executable(device_config src/app/main_config.c)
+target_link_libraries(device_config sudonit_fw)
+
 # --- tests ---
 enable_testing()
 

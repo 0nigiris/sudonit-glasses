@@ -78,6 +78,42 @@ static void test_version_mismatch_gives_defaults(void) {
     CHECK(strcmp(c.device_name, "sudonit-glasses") == 0, "bogus version -> defaults");
 }
 
+static void test_set_get_fields(void) {
+    sd_config_t c;
+    sd_config_defaults(&c);
+
+    CHECK(sd_config_set_field(&c, "device_name", "alex") == SD_OK, "set name");
+    CHECK(sd_config_set_field(&c, "wifi_ssid", "Net") == SD_OK, "set ssid");
+    CHECK(sd_config_set_field(&c, "wifi_password", "pw") == SD_OK, "set pass");
+    CHECK(sd_config_set_field(&c, "server_host", "10.0.0.5") == SD_OK, "set host");
+    CHECK(sd_config_set_field(&c, "server_port", "9100") == SD_OK, "set port");
+    CHECK(c.server_port == 9100, "port stored");
+
+    char v[64];
+    CHECK(sd_config_get_field(&c, "device_name", v, sizeof(v)) == SD_OK &&
+              strcmp(v, "alex") == 0,
+          "get name");
+    CHECK(sd_config_get_field(&c, "server_port", v, sizeof(v)) == SD_OK &&
+              strcmp(v, "9100") == 0,
+          "get port as string");
+
+    /* Validation: unknown key, over-length value, bad port. */
+    CHECK(sd_config_set_field(&c, "nope", "x") == SD_ERR_INVALID, "unknown key");
+    CHECK(sd_config_get_field(&c, "nope", v, sizeof(v)) == SD_ERR_INVALID,
+          "get unknown key");
+    char too_long[64];
+    memset(too_long, 'a', sizeof(too_long));
+    too_long[sizeof(too_long) - 1] = '\0'; /* longer than SD_WIFI_SSID_MAX */
+    CHECK(sd_config_set_field(&c, "wifi_ssid", too_long) == SD_ERR_INVALID,
+          "reject over-length ssid");
+    CHECK(sd_config_set_field(&c, "server_port", "0") == SD_ERR_INVALID,
+          "reject port 0");
+    CHECK(sd_config_set_field(&c, "server_port", "70000") == SD_ERR_INVALID,
+          "reject port >65535");
+    CHECK(sd_config_set_field(&c, "server_port", "12x") == SD_ERR_INVALID,
+          "reject non-numeric port");
+}
+
 int main(void) {
     setenv("SUDONIT_CONFIG_PATH", TEST_PATH, 1);
 
@@ -85,6 +121,7 @@ int main(void) {
     test_load_absent_gives_defaults();
     test_save_load_roundtrip();
     test_version_mismatch_gives_defaults();
+    test_set_get_fields();
 
     unlink(TEST_PATH);
 
