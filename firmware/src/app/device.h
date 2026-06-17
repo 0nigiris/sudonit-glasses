@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include "sudonit/error.h"
+#include "sudonit/hal/transport.h"
 
 /* Outcome of one capture cycle, for logging/tests/diagnostics. */
 typedef struct {
@@ -28,5 +29,14 @@ sd_err_t sd_device_init(void);
  * the next step — see PRE_HARDWARE_ROADMAP.md.) On SD_OK, `status` is filled.
  */
 sd_err_t sd_device_capture_cycle(sd_device_status_t *status);
+
+/* Full V1 uplink over an open transport: capture an image (mock camera),
+ * stream it to the phone via the protocol, wait for the response, and hand the
+ * AI text back to the application layer in `response_out` (NUL-terminated,
+ * truncated to `response_cap`). This is the firmware half of the core loop,
+ * proven against the real Python phone server with no ESP32 hardware.
+ */
+sd_err_t sd_device_run_uplink(sd_transport_t *t, const char *image_id,
+                              char *response_out, size_t response_cap);
 
 #endif /* SUDONIT_APP_DEVICE_H */
