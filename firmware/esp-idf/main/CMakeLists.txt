@@ -53,3 +53,8 @@ endif()
 if(SUDONIT_PROVISION_CONSOLE)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE SUDONIT_PROVISION_CONSOLE=1)
 endif()
+# Real OV5640 camera driver (needs the esp32-camera managed component declared in
+# idf_component.yml):  idf.py build -DSUDONIT_CAMERA_DRIVER=1
+if(SUDONIT_CAMERA_DRIVER)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE SUDONIT_CAMERA_DRIVER=1)
+endif()

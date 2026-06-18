@@ -36,6 +36,10 @@ idf.py -C firmware/esp-idf build -DSUDONIT_NET_SELFTEST=1
 
 # Serial provisioning/recovery console over the UART (show/get/set/save/reset).
 idf.py -C firmware/esp-idf build -DSUDONIT_PROVISION_CONSOLE=1
+
+# Real OV5640 camera driver (esp32-camera). Off by default; see
+# docs/CAMERA_BRINGUP.md for the pin map to verify and the day-one checklist.
+idf.py -C firmware/esp-idf build -DSUDONIT_CAMERA_DRIVER=1
 ```
 
 The self-test uses `ping`/`pong` rather than a full image uplink so it does not
@@ -72,7 +76,7 @@ firmware/esp-idf/
 
 | HAL          | Backend file                    | State                          |
 |--------------|----------------------------------|--------------------------------|
-| camera       | `src/hal/esp32/camera_esp.c`     | stub — OV5640 driver TODO      |
+| camera       | `src/hal/esp32/camera_esp.c`     | OV5640 driver written (behind `-DSUDONIT_CAMERA_DRIVER=1`); default build is a stub. See `docs/CAMERA_BRINGUP.md` |
 | audio        | `src/hal/esp32/audio_esp.c`      | stub — MAX98357A I2S TODO      |
 | mic          | `src/hal/esp32/mic_esp.c`        | stub — ICS43434 I2S TODO       |
 | battery      | `src/hal/esp32/battery_esp.c`    | stub — VBAT ADC TODO           |

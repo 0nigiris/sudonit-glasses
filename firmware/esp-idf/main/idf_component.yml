@@ -1,0 +1,10 @@
+# Managed component dependencies for the `main` component.
+#
+# esp32-camera provides the OV5640/OV2640 DVP driver used by camera_esp.c. The
+# camera driver code is compiled only with -DSUDONIT_CAMERA_DRIVER=1; the default
+# build leaves camera_esp.c as a stub, but declaring the dependency here keeps the
+# component available so the real driver builds without manual setup.
+#
+# Pin to a specific version once verified on the target hardware.
+dependencies:
+  espressif/esp32-camera: "*"
