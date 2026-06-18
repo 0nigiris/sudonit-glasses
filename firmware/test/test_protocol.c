@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "sudonit/protocol/framing.h"
@@ -246,12 +247,34 @@ static void test_audio_downlink(void) {
     sd_transport_close(phone);
 }
 
+/* A stalled peer must not hang the device forever: recv returns SD_ERR_TIMEOUT.
+ * The connect path sets these timeouts on the real socket; here we set a short
+ * one on a wrapped socketpair fd and send nothing. */
+static void test_recv_timeout(void) {
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+        CHECK(0, "socketpair");
+        return;
+    }
+    struct timeval tv = {.tv_sec = 0, .tv_usec = 100 * 1000}; /* 100 ms */
+    setsockopt(sv[0], SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    sd_transport_t *a = sd_transport_wrap_fd(sv[0]);
+
+    uint8_t buf[4];
+    CHECK(sd_transport_recv(a, buf, sizeof(buf)) == SD_ERR_TIMEOUT,
+          "recv times out on a silent peer");
+
+    sd_transport_close(a);
+    close(sv[1]);
+}
+
 int main(void) {
     test_sha256();
     test_json();
     test_framing_roundtrip();
     test_message_layer_roundtrip();
     test_audio_downlink();
+    test_recv_timeout();
 
     if (g_failures == 0) {
         printf("all protocol tests passed\n");

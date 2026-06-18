@@ -19,6 +19,9 @@
 #include "sudonit/provisioning.h"
 
 #ifdef SUDONIT_NET_SELFTEST
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #include "sudonit/hal/transport.h"
 #include "sudonit/protocol/messages.h"
 #endif
@@ -73,11 +76,24 @@ void app_main(void) {
     } else if (cfg.server_host[0] == '\0') {
         SD_LOGE(TAG, "net self-test: no server_host configured");
     } else {
+        /* Reconnect with backoff: at bring-up the phone app may not be listening
+         * yet, and Wi-Fi/TCP can drop. Retry a bounded number of times rather
+         * than failing on the first attempt. Each connect attempt is itself
+         * bounded by the transport's connect timeout. */
         sd_transport_t *t = NULL;
-        sd_err_t terr = sd_transport_connect(&t, cfg.server_host, cfg.server_port);
+        sd_err_t terr = SD_ERR_IO;
+        for (int attempt = 1; attempt <= 5; ++attempt) {
+            terr = sd_transport_connect(&t, cfg.server_host, cfg.server_port);
+            if (terr == SD_OK) {
+                break;
+            }
+            SD_LOGW(TAG, "net self-test: connect attempt %d/5 to %s:%u failed: %s",
+                    attempt, cfg.server_host, (unsigned)cfg.server_port,
+                    sd_strerror(terr));
+            vTaskDelay(pdMS_TO_TICKS(1000 * attempt)); /* linear backoff */
+        }
         if (terr != SD_OK) {
-            SD_LOGE(TAG, "net self-test: connect to %s:%u failed: %s",
-                    cfg.server_host, (unsigned)cfg.server_port, sd_strerror(terr));
+            SD_LOGE(TAG, "net self-test: could not connect after retries");
         } else {
             sd_err_t perr = sd_msg_send_ping(t);
             sd_msg_type_t mtype = SD_MSG_UNKNOWN;
