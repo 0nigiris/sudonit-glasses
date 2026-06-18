@@ -87,6 +87,9 @@ firmware/esp-idf/
 | transport    | `src/hal/esp32/transport_wifi.c` | **implemented** — LwIP TCP client |
 | net          | `src/hal/esp32/net_esp.c`        | **implemented** — Wi-Fi STA bring-up |
 
+Full board pin/PSRAM allocation and the consolidated day-one bring-up checklist
+live in `../../docs/BOARD_RESOURCES.md` (the single source of truth).
+
 The peripheral stubs return `SD_ERR_UNSUPPORTED` (no fake hardware behavior).
 Implementing one real driver behind its existing header is the per-peripheral
 integration step in `../../docs/HARDWARE_INTEGRATION_PLAN.md`. The transport and
