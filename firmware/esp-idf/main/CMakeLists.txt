@@ -17,6 +17,8 @@ idf_component_register(
         "../../src/config/config_store_nvs.c"
         # device application (hardware-agnostic)
         "../../src/app/device.c"
+        # serial provisioning console (transport-independent command processor)
+        "../../src/app/provisioning.c"
         # ESP32 HAL backends (stubs until drivers land)
         "../../src/hal/esp32/camera_esp.c"
         "../../src/hal/esp32/audio_esp.c"

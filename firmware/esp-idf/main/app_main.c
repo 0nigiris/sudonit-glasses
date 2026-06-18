@@ -15,6 +15,7 @@
 #include "sudonit/hal/camera.h"
 #include "sudonit/hal/mic.h"
 #include "sudonit/log.h"
+#include "sudonit/provisioning.h"
 
 static const char *TAG = "app_main";
 
@@ -52,4 +53,12 @@ void app_main(void) {
     SD_LOGI(TAG, "capture cycle: %s", sd_strerror(err));
 
     SD_LOGI(TAG, "boot complete — peripheral drivers are stubs pending hardware");
+
+#ifdef SUDONIT_PROVISION_CONSOLE
+    /* Recovery/provisioning channel: drop into the serial console over the UART.
+     * ESP-IDF maps stdio to the console UART, so the same REPL used on the host
+     * runs unchanged here. Guarded by a build flag so production boots skip it. */
+    SD_LOGI(TAG, "entering provisioning console (SUDONIT_PROVISION_CONSOLE)");
+    sd_provision_repl(stdin, stdout);
+#endif
 }

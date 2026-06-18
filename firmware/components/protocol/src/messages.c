@@ -1,6 +1,7 @@
 #include "sudonit/protocol/messages.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "sudonit/protocol/framing.h"
@@ -40,8 +41,13 @@ sd_err_t sd_msg_send_image(sd_transport_t *t, const char *image_id,
         return err;
     }
 
-    /* Binary chunks: [seq: uint32 BE][data slice]. */
-    uint8_t frame[4 + SD_CHUNK_SIZE];
+    /* Binary chunks: [seq: uint32 BE][data slice]. Heap-allocated rather than a
+     * 4 KB stack array — on the ESP32 the main task stack is only a few KB, so a
+     * stack buffer this size would overflow it. */
+    uint8_t *frame = malloc(4 + SD_CHUNK_SIZE);
+    if (!frame) {
+        return SD_ERR_NO_MEM;
+    }
     for (size_t seq = 0; seq < chunks; ++seq) {
         size_t start = seq * SD_CHUNK_SIZE;
         size_t clen = (start < len) ? (len - start) : 0;
@@ -55,9 +61,11 @@ sd_err_t sd_msg_send_image(sd_transport_t *t, const char *image_id,
         }
         err = sd_frame_send(t, SD_KIND_BINARY, frame, 4 + clen);
         if (err != SD_OK) {
+            free(frame);
             return err;
         }
     }
+    free(frame);
 
     /* image_end */
     char end[128];

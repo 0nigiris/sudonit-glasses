@@ -45,7 +45,9 @@ set(PROTOCOL_SRC
     components/protocol/src/sha256.c)
 
 add_library(sudonit_fw STATIC
-    ${CORE_SRC} ${HAL_SRC} ${PROTOCOL_SRC} src/app/device.c)
+    ${CORE_SRC} ${HAL_SRC} ${PROTOCOL_SRC}
+    src/app/device.c
+    src/app/provisioning.c)
 target_include_directories(sudonit_fw PUBLIC
     include
     src/app
@@ -62,6 +64,9 @@ target_link_libraries(device_interop sudonit_fw)
 add_executable(device_config src/app/main_config.c)
 target_link_libraries(device_config sudonit_fw)
 
+add_executable(device_provision src/app/main_provision.c)
+target_link_libraries(device_provision sudonit_fw)
+
 # --- tests ---
 enable_testing()
 
@@ -77,3 +82,7 @@ add_test(NAME protocol COMMAND test_protocol)
 add_executable(test_config test/test_config.c)
 target_link_libraries(test_config sudonit_fw)
 add_test(NAME config COMMAND test_config)
+
+add_executable(test_provisioning test/test_provisioning.c)
+target_link_libraries(test_provisioning sudonit_fw)
+add_test(NAME provisioning COMMAND test_provisioning)
