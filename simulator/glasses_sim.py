@@ -46,20 +46,36 @@ def capture_and_send(host: str, port: int, image_path: Path) -> str:
         print(f"[glasses] sending capture '{image_path.name}' ({len(data)} bytes)")
         messages.send_image(sock, image_id=image_path.stem, data=data, media_type="image/png")
 
-        # 3. wait for the AI response coming back from the phone
+        # 3. wait for the AI response + the audio downlink coming back. This is
+        #    the exact sequence the firmware handles: ai_response (text), then
+        #    audio_begin + binary PCM chunks + audio_end. The device reassembles
+        #    and plays the PCM; here we just report it.
         answer = ""
+        audio_rx: messages.AudioReassembler | None = None
         while True:
             kind, payload = framing.recv_frame(sock)
-            if kind != framing.KIND_JSON:
+            if kind == framing.KIND_BINARY:
+                if audio_rx is not None:
+                    audio_rx.add_chunk(payload)
                 continue
             msg = messages.decode_control(payload)
-            if msg["type"] == "ai_response":
+            mtype = msg["type"]
+            if mtype == "ai_response":
                 answer = msg["text"]
                 print(f"[glasses] AI response: {answer}")
-            elif msg["type"] == "play_audio":
-                print(f"[glasses] (playing on speaker) {msg['content']}")
+            elif mtype == "audio_begin":
+                audio_rx = messages.AudioReassembler(msg)
+            elif mtype == "audio_end":
+                audio = audio_rx.finish()  # verifies size + SHA-256
+                print(
+                    f"[glasses] (playing on speaker) {len(audio.pcm)} bytes PCM "
+                    f"@ {audio.sample_rate} Hz, {audio.channels} ch"
+                )
                 break
-            elif msg["type"] == "error":
+            elif mtype == "play_audio":  # legacy text marker (no audio downlink)
+                print(f"[glasses] (turn complete) {msg.get('content', '')}")
+                break
+            elif mtype == "error":
                 print(f"[glasses] error {msg.get('code')}: {msg.get('message')}")
                 break
         return answer
