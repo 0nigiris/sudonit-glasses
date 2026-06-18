@@ -14,7 +14,33 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import wave
+from dataclasses import dataclass
 from pathlib import Path
+
+
+@dataclass(frozen=True)
+class Pcm:
+    """Raw 16-bit little-endian PCM plus the metadata needed to play it. This is
+    exactly what the firmware's sd_audio_play_pcm() / the audio downlink need."""
+
+    data: bytes
+    sample_rate: int
+    channels: int
+
+
+def pcm_from_wav(wav_path: str | Path) -> Pcm:
+    """Extract raw 16-bit PCM samples from a WAV file (stdlib only).
+
+    Raises ValueError if the file is not 16-bit PCM — the glasses speaker path is
+    fixed at 16-bit, so anything else is a producer bug worth surfacing early."""
+    with wave.open(str(wav_path), "rb") as wav:
+        if wav.getsampwidth() != 2:
+            raise ValueError(
+                f"expected 16-bit PCM, got {wav.getsampwidth() * 8}-bit"
+            )
+        frames = wav.readframes(wav.getnframes())
+        return Pcm(frames, wav.getframerate(), wav.getnchannels())
 
 
 class TextToSpeech:

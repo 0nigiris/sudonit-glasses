@@ -47,6 +47,8 @@ KNOWN_TYPES = frozenset(
         "image_end",
         "analyze_image",
         "ai_response",
+        "audio_begin",
+        "audio_end",
         "play_audio",
         "stop_audio",
         "notification",
@@ -110,6 +112,94 @@ def send_image(
         chunk = data[start : start + chunk_size]
         framing.send_frame(sock, framing.KIND_BINARY, _SEQ.pack(seq) + chunk)
     send_control(sock, {"type": "image_end", "image_id": image_id})
+
+
+# --- Audio transfer (downlink: phone -> glasses) --------------------------
+#
+# The mirror image of the uplink: the phone renders speech to PCM and streams it
+# back for the glasses to play. It reuses the exact same proven framing as the
+# image path (begin / binary chunks / end + SHA-256), so the device's receive
+# side is symmetric with its send side. The payload is raw 16-bit little-endian
+# PCM — exactly what the firmware's sd_audio_play_pcm() consumes — so no codec is
+# needed in the hot path. (Replaces sending the answer as text in `play_audio`,
+# which the device could not actually play.)
+
+
+def send_audio(
+    sock: socket.socket,
+    audio_id: str,
+    pcm: bytes,
+    sample_rate: int,
+    channels: int,
+    audio_format: str = "pcm_s16le",
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> None:
+    """Send rendered audio as audio_begin + N binary chunks + audio_end."""
+    chunks = max(1, (len(pcm) + chunk_size - 1) // chunk_size)
+    send_control(
+        sock,
+        {
+            "type": "audio_begin",
+            "audio_id": audio_id,
+            "size": len(pcm),
+            "chunks": chunks,
+            "sha256": hashlib.sha256(pcm).hexdigest(),
+            "format": audio_format,
+            "sample_rate": sample_rate,
+            "channels": channels,
+        },
+    )
+    for seq in range(chunks):
+        start = seq * chunk_size
+        chunk = pcm[start : start + chunk_size]
+        framing.send_frame(sock, framing.KIND_BINARY, _SEQ.pack(seq) + chunk)
+    send_control(sock, {"type": "audio_end", "audio_id": audio_id})
+
+
+@dataclass
+class ReceivedAudio:
+    audio_id: str
+    audio_format: str
+    sample_rate: int
+    channels: int
+    pcm: bytes
+
+
+class AudioReassembler:
+    """Receiver for one in-flight audio transfer (see ImageReassembler)."""
+
+    def __init__(self, begin: dict):
+        self.audio_id: str = begin["audio_id"]
+        self.audio_format: str = begin.get("format", "pcm_s16le")
+        self.sample_rate: int = begin["sample_rate"]
+        self.channels: int = begin["channels"]
+        self.expected_size: int = begin["size"]
+        self.expected_chunks: int = begin["chunks"]
+        self.expected_sha256: str = begin["sha256"]
+        self._chunks: dict[int, bytes] = {}
+
+    def add_chunk(self, payload: bytes) -> None:
+        if len(payload) < _SEQ.size:
+            raise framing.ProtocolError("binary chunk shorter than its header")
+        (seq,) = _SEQ.unpack(payload[: _SEQ.size])
+        self._chunks[seq] = payload[_SEQ.size :]
+
+    def finish(self) -> ReceivedAudio:
+        if len(self._chunks) != self.expected_chunks:
+            raise framing.ProtocolError(
+                f"chunk count mismatch: got {len(self._chunks)}, "
+                f"expected {self.expected_chunks}"
+            )
+        pcm = b"".join(self._chunks[i] for i in range(self.expected_chunks))
+        if len(pcm) != self.expected_size:
+            raise framing.ProtocolError(
+                f"size mismatch: got {len(pcm)}, expected {self.expected_size}"
+            )
+        if hashlib.sha256(pcm).hexdigest() != self.expected_sha256:
+            raise framing.ProtocolError("sha256 mismatch — audio corrupted in transit")
+        return ReceivedAudio(
+            self.audio_id, self.audio_format, self.sample_rate, self.channels, pcm
+        )
 
 
 @dataclass

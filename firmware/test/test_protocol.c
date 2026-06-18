@@ -59,6 +59,15 @@ static void test_json(void) {
     CHECK(sd_json_get_string("{\"type\":\"pong\"}", "missing", out, sizeof(out)) ==
               SD_ERR_INVALID,
           "json missing key");
+
+    uint32_t u = 0;
+    CHECK(sd_json_get_uint("{\"size\":1600,\"channels\":1}", "size", &u) == SD_OK &&
+              u == 1600,
+          "json uint value");
+    CHECK(sd_json_get_uint("{\"size\":1600}", "channels", &u) == SD_ERR_INVALID,
+          "json uint missing key");
+    CHECK(sd_json_get_uint("{\"x\":\"42\"}", "x", &u) == SD_ERR_INVALID,
+          "json uint rejects quoted value");
 }
 
 static void test_framing_roundtrip(void) {
@@ -170,11 +179,79 @@ static void test_message_layer_roundtrip(void) {
     sd_transport_close(pa.t);
 }
 
+/* The phone -> glasses audio downlink: audio_begin + chunks + audio_end. The
+ * device classifies audio_begin, then sd_msg_recv_audio_body reassembles and
+ * SHA-verifies the PCM. Sent buffered (no thread): it fits the socket buffer. */
+static void test_audio_downlink(void) {
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+        CHECK(0, "socketpair");
+        return;
+    }
+    sd_transport_t *device = sd_transport_wrap_fd(sv[0]);
+    sd_transport_t *phone = sd_transport_wrap_fd(sv[1]);
+
+    uint8_t pcm[9000]; /* spans 3 chunks at SD_CHUNK_SIZE */
+    for (size_t i = 0; i < sizeof(pcm); ++i) {
+        pcm[i] = (uint8_t)(i * 7 + 1);
+    }
+    char sha[65];
+    sd_sha256_hex(pcm, sizeof(pcm), sha);
+    uint32_t chunks = (uint32_t)((sizeof(pcm) + SD_CHUNK_SIZE - 1) / SD_CHUNK_SIZE);
+
+    char begin[256];
+    snprintf(begin, sizeof(begin),
+             "{\"type\":\"audio_begin\",\"audio_id\":\"x\",\"size\":%zu,"
+             "\"chunks\":%u,\"sha256\":\"%s\",\"format\":\"pcm_s16le\","
+             "\"sample_rate\":16000,\"channels\":1}",
+             sizeof(pcm), (unsigned)chunks, sha);
+    sd_frame_send(phone, SD_KIND_JSON, (const uint8_t *)begin, strlen(begin));
+    for (uint32_t s = 0; s < chunks; ++s) {
+        uint8_t frame[4 + SD_CHUNK_SIZE];
+        size_t start = (size_t)s * SD_CHUNK_SIZE;
+        size_t dlen = (start + SD_CHUNK_SIZE <= sizeof(pcm)) ? SD_CHUNK_SIZE
+                                                             : sizeof(pcm) - start;
+        frame[0] = (uint8_t)(s >> 24);
+        frame[1] = (uint8_t)(s >> 16);
+        frame[2] = (uint8_t)(s >> 8);
+        frame[3] = (uint8_t)s;
+        memcpy(frame + 4, pcm + start, dlen);
+        sd_frame_send(phone, SD_KIND_BINARY, frame, 4 + dlen);
+    }
+    const char *end = "{\"type\":\"audio_end\",\"audio_id\":\"x\"}";
+    sd_frame_send(phone, SD_KIND_JSON, (const uint8_t *)end, strlen(end));
+
+    sd_msg_type_t type = SD_MSG_UNKNOWN;
+    char text[512];
+    CHECK(sd_msg_recv(device, &type, text, sizeof(text)) == SD_OK &&
+              type == SD_MSG_AUDIO_BEGIN,
+          "classify audio_begin");
+
+    uint32_t size = 0, cks = 0, rate = 0, channels = 0;
+    char sha2[65];
+    sd_json_get_uint(text, "size", &size);
+    sd_json_get_uint(text, "chunks", &cks);
+    sd_json_get_uint(text, "sample_rate", &rate);
+    sd_json_get_uint(text, "channels", &channels);
+    sd_json_get_string(text, "sha256", sha2, sizeof(sha2));
+    CHECK(size == sizeof(pcm) && cks == chunks && rate == 16000 && channels == 1,
+          "audio_begin numeric fields");
+
+    uint8_t out[9000];
+    CHECK(sd_msg_recv_audio_body(device, cks, size, sha2, out, sizeof(out)) == SD_OK,
+          "recv audio body verifies sha");
+    CHECK(memcmp(out, pcm, sizeof(pcm)) == 0, "reassembled pcm matches");
+
+    sd_transport_close(device);
+    sd_transport_close(phone);
+}
+
 int main(void) {
     test_sha256();
     test_json();
     test_framing_roundtrip();
     test_message_layer_roundtrip();
+    test_audio_downlink();
 
     if (g_failures == 0) {
         printf("all protocol tests passed\n");

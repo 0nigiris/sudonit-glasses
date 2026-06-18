@@ -105,3 +105,33 @@ sd_err_t sd_json_get_string(const char *json, const char *key, char *out, size_t
     out[pos < cap ? pos : cap - 1] = '\0';
     return SD_OK;
 }
+
+sd_err_t sd_json_get_uint(const char *json, const char *key, uint32_t *out) {
+    if (!json || !key || !out) {
+        return SD_ERR_INVALID;
+    }
+
+    char needle[64];
+    int n = snprintf(needle, sizeof(needle), "\"%s\"", key);
+    if (n < 0 || (size_t)n >= sizeof(needle)) {
+        return SD_ERR_INVALID;
+    }
+    const char *p = strstr(json, needle);
+    if (!p) {
+        return SD_ERR_INVALID;
+    }
+    p += n;
+    while (*p == ' ' || *p == '\t') ++p;
+    if (*p != ':') return SD_ERR_INVALID;
+    ++p;
+    while (*p == ' ' || *p == '\t') ++p;
+    if (*p < '0' || *p > '9') return SD_ERR_INVALID;
+
+    uint32_t value = 0;
+    while (*p >= '0' && *p <= '9') {
+        value = value * 10u + (uint32_t)(*p - '0');
+        ++p;
+    }
+    *out = value;
+    return SD_OK;
+}

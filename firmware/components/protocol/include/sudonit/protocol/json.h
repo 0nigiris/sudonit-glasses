@@ -12,6 +12,7 @@
 #define SUDONIT_PROTOCOL_JSON_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "sudonit/error.h"
 
@@ -20,5 +21,10 @@
  * \uXXXX (incl. surrogate pairs) -> UTF-8. Returns SD_ERR_INVALID if not found.
  */
 sd_err_t sd_json_get_string(const char *json, const char *key, char *out, size_t cap);
+
+/* Find "key": <number> in `json` and parse the unsigned integer into `*out`.
+ * For the flat numeric fields in control messages (size, chunks, sample_rate,
+ * channels). Returns SD_ERR_INVALID if the key is missing or not a number. */
+sd_err_t sd_json_get_uint(const char *json, const char *key, uint32_t *out);
 
 #endif /* SUDONIT_PROTOCOL_JSON_H */

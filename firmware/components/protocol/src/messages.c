@@ -116,11 +116,85 @@ sd_err_t sd_msg_recv(sd_transport_t *t, sd_msg_type_t *type_out, char *text_out,
     } else if (strcmp(type, "error") == 0) {
         mtype = SD_MSG_ERROR;
         text_key = "message";
+    } else if (strcmp(type, "audio_begin") == 0) {
+        mtype = SD_MSG_AUDIO_BEGIN;
     }
 
-    if (text_key && text_out && text_cap > 0) {
+    if (mtype == SD_MSG_AUDIO_BEGIN && text_out && text_cap > 0) {
+        /* Hand back the raw begin JSON; the caller reads the numeric fields. */
+        snprintf(text_out, text_cap, "%s", json);
+    } else if (text_key && text_out && text_cap > 0) {
         sd_json_get_string(json, text_key, text_out, text_cap); /* best-effort */
     }
     if (type_out) *type_out = mtype;
     return SD_OK;
+}
+
+sd_err_t sd_msg_recv_audio_body(sd_transport_t *t, uint32_t chunks, uint32_t size,
+                                const char *sha_hex, uint8_t *pcm, size_t pcm_cap) {
+    if (!t || !sha_hex || (!pcm && size > 0) || pcm_cap < size) {
+        return SD_ERR_INVALID;
+    }
+
+    /* Heap, not stack: a chunk frame is 4 + SD_CHUNK_SIZE bytes — too large for
+     * the ESP32 main-task stack (matches the image-send buffer policy). */
+    uint8_t *frame = malloc(4 + SD_CHUNK_SIZE);
+    if (!frame) {
+        return SD_ERR_NO_MEM;
+    }
+
+    sd_err_t err = SD_OK;
+    size_t total = 0;
+    for (uint32_t i = 0; i < chunks; ++i) {
+        char kind = 0;
+        size_t len = 0;
+        err = sd_frame_recv(t, &kind, frame, 4 + SD_CHUNK_SIZE, &len);
+        if (err != SD_OK) {
+            goto done;
+        }
+        if (kind != SD_KIND_BINARY || len < 4) {
+            err = SD_ERR_IO;
+            goto done;
+        }
+        uint32_t seq = ((uint32_t)frame[0] << 24) | ((uint32_t)frame[1] << 16) |
+                       ((uint32_t)frame[2] << 8) | (uint32_t)frame[3];
+        size_t dlen = len - 4;
+        size_t off = (size_t)seq * SD_CHUNK_SIZE;
+        if (off + dlen > pcm_cap) {
+            err = SD_ERR_IO; /* out-of-range sequence number */
+            goto done;
+        }
+        if (dlen > 0) {
+            memcpy(pcm + off, frame + 4, dlen);
+        }
+        total += dlen;
+    }
+
+    /* The closing audio_end control frame. */
+    {
+        char kind = 0;
+        size_t len = 0;
+        err = sd_frame_recv(t, &kind, frame, 4 + SD_CHUNK_SIZE, &len);
+        if (err != SD_OK) {
+            goto done;
+        }
+        if (kind != SD_KIND_JSON) {
+            err = SD_ERR_IO;
+            goto done;
+        }
+    }
+
+    if (total != size) {
+        err = SD_ERR_IO;
+        goto done;
+    }
+    char hex[65];
+    sd_sha256_hex(pcm, size, hex);
+    if (strcmp(hex, sha_hex) != 0) {
+        err = SD_ERR_IO; /* corrupted in transit */
+    }
+
+done:
+    free(frame);
+    return err;
 }

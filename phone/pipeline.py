@@ -17,6 +17,7 @@ from pathlib import Path
 from .ai import AIProvider, get_provider
 from .ai.provider import DEFAULT_PROMPT
 from .audio import TextToSpeech
+from .image import InvalidImage, validate_image
 
 
 @dataclass
@@ -50,17 +51,27 @@ class Pipeline:
     ) -> PipelineResult:
         started = time.monotonic()
 
-        result = self.provider.analyze_image(image_bytes, media_type, prompt)
+        # Reject a malformed capture here, with a speakable error, rather than
+        # passing garbage to the model (which only fails on real hardware). The
+        # check is structural and skips raw/mock media types (see image.py).
+        try:
+            validate_image(image_bytes, media_type)
+            result = self.provider.analyze_image(image_bytes, media_type, prompt)
+            text, provider, model = result.text, result.provider, result.model
+        except InvalidImage as exc:
+            text = "Sorry, I couldn't read that image."
+            provider, model = "validator", "invalid-image"
+            print(f"[pipeline] rejected image '{image_id}': {exc}")
 
         wav_path = self.output_dir / f"{image_id}.wav"
-        audio_path = self.tts.synthesize(result.text, wav_path)
+        audio_path = self.tts.synthesize(text, wav_path)
         audio_played = self.tts.play(audio_path) if play else False
 
         latency_ms = int((time.monotonic() - started) * 1000)
         return PipelineResult(
-            text=result.text,
-            provider=result.provider,
-            model=result.model,
+            text=text,
+            provider=provider,
+            model=model,
             audio_path=audio_path,
             audio_played=audio_played,
             latency_ms=latency_ms,
