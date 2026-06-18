@@ -23,6 +23,25 @@ idf.py -C firmware/esp-idf -p /dev/ttyACM0 flash monitor
 capture cycle. Until the real drivers land, the peripheral stubs report
 `unsupported` — that is expected and proves the app→HAL path runs on target.
 
+## Optional bring-up features (off by default)
+
+Two build-time features are compiled out of the default (production) build and
+enabled with a CMake flag:
+
+```bash
+# Wi-Fi data-plane self-test: bring up Wi-Fi STA from the provisioned creds,
+# connect to the phone server, and exchange ping/pong (proves net_esp +
+# transport_wifi + protocol end-to-end). Provision first with device_provision.
+idf.py -C firmware/esp-idf build -DSUDONIT_NET_SELFTEST=1
+
+# Serial provisioning/recovery console over the UART (show/get/set/save/reset).
+idf.py -C firmware/esp-idf build -DSUDONIT_PROVISION_CONSOLE=1
+```
+
+The self-test uses `ping`/`pong` rather than a full image uplink so it does not
+depend on the (still-stubbed) camera; once the camera driver lands, the same
+path runs `sd_device_run_uplink` with no change to the protocol layer.
+
 ## Simulate (Wokwi, no hardware)
 
 Boot + serial logs in the Wokwi ESP32-S3 simulator. Requires the Wokwi CLI and a
@@ -57,8 +76,11 @@ firmware/esp-idf/
 | audio        | `src/hal/esp32/audio_esp.c`      | stub — MAX98357A I2S TODO      |
 | mic          | `src/hal/esp32/mic_esp.c`        | stub — ICS43434 I2S TODO       |
 | battery      | `src/hal/esp32/battery_esp.c`    | stub — VBAT ADC TODO           |
-| transport    | `src/hal/esp32/transport_wifi.c` | stub — Wi-Fi STA + TCP TODO    |
+| transport    | `src/hal/esp32/transport_wifi.c` | **implemented** — LwIP TCP client |
+| net          | `src/hal/esp32/net_esp.c`        | **implemented** — Wi-Fi STA bring-up |
 
-Each stub returns `SD_ERR_UNSUPPORTED` (no fake hardware behavior). Implementing
-one real driver behind its existing header is the per-peripheral integration
-step in `../../docs/HARDWARE_INTEGRATION_PLAN.md`.
+The peripheral stubs return `SD_ERR_UNSUPPORTED` (no fake hardware behavior).
+Implementing one real driver behind its existing header is the per-peripheral
+integration step in `../../docs/HARDWARE_INTEGRATION_PLAN.md`. The transport and
+net backends are implemented (compiled & linked); what remains is on-silicon
+verification against a live AP and phone server.

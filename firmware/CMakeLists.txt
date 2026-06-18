@@ -35,7 +35,8 @@ set(HAL_SRC
     src/hal/mock/battery_mock.c
     src/hal/mock/audio_mock.c
     src/hal/mock/mic_mock.c
-    src/hal/host/transport_tcp.c)
+    src/hal/host/transport_tcp.c
+    src/hal/host/net_host.c)
 
 # --- protocol component (C port; same sources the ESP-IDF component uses) ---
 set(PROTOCOL_SRC

@@ -26,7 +26,8 @@ The HAL seams (defined pre-hardware):
 | `hal/audio.h`          | write PCM/WAV to file/log   | MAX98357A over I2S              |
 | `hal/mic.h`            | replay a recorded sample    | ICS43434/INMP441 over I2S       |
 | `hal/battery.h`        | fixed/scripted percentage   | ADC read of divider on VBAT     |
-| `hal/transport.h`      | TCP socket (host)           | Wi-Fi data plane + BLE control  |
+| `hal/transport.h`      | TCP socket (host)           | Wi-Fi data plane (**built**) + BLE control |
+| `hal/net.h`            | no-op (OS owns the network) | Wi-Fi STA bring-up (**built**)  |
 
 ---
 
@@ -42,6 +43,14 @@ The HAL seams (defined pre-hardware):
 5. Bring up Wi-Fi STA: associate with a test AP, open a TCP connection to the
    running `python -m phone.server`, send a `ping`, expect `pong`. **This proves
    the transport HAL on real silicon with zero peripherals attached.**
+
+   *Firmware side already built:* `net_esp.c` (`sd_net_start`) associates with the
+   provisioned SSID/password and waits for an IP; `transport_wifi.c` is the LwIP
+   TCP client implementing `hal/transport.h` (the same all-or-nothing client as
+   the host build). A guarded self-test in `app_main` runs exactly this ping/pong
+   — provision creds with `device_provision`, then build with
+   `idf.py build -DSUDONIT_NET_SELFTEST=1` and watch the serial log. What remains
+   is running it on real silicon against a live AP (no hardware yet).
 
 Exit criteria: board boots project firmware, logs over serial, and completes a
 ping/pong with the phone-brain over Wi-Fi.

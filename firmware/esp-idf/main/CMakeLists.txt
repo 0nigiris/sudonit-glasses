@@ -25,6 +25,7 @@ idf_component_register(
         "../../src/hal/esp32/mic_esp.c"
         "../../src/hal/esp32/battery_esp.c"
         "../../src/hal/esp32/transport_wifi.c"
+        "../../src/hal/esp32/net_esp.c"
         # protocol component sources
         "../../components/protocol/src/framing.c"
         "../../components/protocol/src/messages.c"
@@ -36,4 +37,19 @@ idf_component_register(
         "../../src/app"
         "../../components/protocol/include"
     PRIV_REQUIRES
-        nvs_flash)
+        nvs_flash
+        esp_wifi
+        esp_netif
+        esp_event)
+
+# Optional bring-up/recovery features, off by default so production boots are
+# unaffected. Enable from the command line, e.g.
+#   idf.py build -DSUDONIT_NET_SELFTEST=1
+#   idf.py build -DSUDONIT_PROVISION_CONSOLE=1
+# These map a CMake cache variable to the preprocessor define app_main checks.
+if(SUDONIT_NET_SELFTEST)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE SUDONIT_NET_SELFTEST=1)
+endif()
+if(SUDONIT_PROVISION_CONSOLE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE SUDONIT_PROVISION_CONSOLE=1)
+endif()

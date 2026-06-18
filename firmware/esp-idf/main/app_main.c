@@ -14,8 +14,14 @@
 #include "sudonit/hal/battery.h"
 #include "sudonit/hal/camera.h"
 #include "sudonit/hal/mic.h"
+#include "sudonit/hal/net.h"
 #include "sudonit/log.h"
 #include "sudonit/provisioning.h"
+
+#ifdef SUDONIT_NET_SELFTEST
+#include "sudonit/hal/transport.h"
+#include "sudonit/protocol/messages.h"
+#endif
 
 static const char *TAG = "app_main";
 
@@ -53,6 +59,41 @@ void app_main(void) {
     SD_LOGI(TAG, "capture cycle: %s", sd_strerror(err));
 
     SD_LOGI(TAG, "boot complete — peripheral drivers are stubs pending hardware");
+
+#ifdef SUDONIT_NET_SELFTEST
+    /* Data-plane self-test: bring Wi-Fi up from the provisioned credentials,
+     * open a TCP connection to the phone server, and exchange ping/pong. This
+     * exercises net_esp + transport_wifi + the protocol layer end-to-end without
+     * needing the (still-stubbed) camera. Once the camera driver lands, swapping
+     * the ping for sd_device_run_uplink completes the full capture->AI loop with
+     * no change to the protocol layer. */
+    SD_LOGI(TAG, "net self-test: bringing up Wi-Fi (net backend=%s)", sd_net_backend());
+    if (sd_net_start(&cfg) != SD_OK) {
+        SD_LOGE(TAG, "net self-test: Wi-Fi bring-up failed");
+    } else if (cfg.server_host[0] == '\0') {
+        SD_LOGE(TAG, "net self-test: no server_host configured");
+    } else {
+        sd_transport_t *t = NULL;
+        sd_err_t terr = sd_transport_connect(&t, cfg.server_host, cfg.server_port);
+        if (terr != SD_OK) {
+            SD_LOGE(TAG, "net self-test: connect to %s:%u failed: %s",
+                    cfg.server_host, (unsigned)cfg.server_port, sd_strerror(terr));
+        } else {
+            sd_err_t perr = sd_msg_send_ping(t);
+            sd_msg_type_t mtype = SD_MSG_UNKNOWN;
+            if (perr == SD_OK) {
+                perr = sd_msg_recv(t, &mtype, NULL, 0);
+            }
+            if (perr == SD_OK && mtype == SD_MSG_PONG) {
+                SD_LOGI(TAG, "net self-test: ping/pong OK — data plane is live");
+            } else {
+                SD_LOGE(TAG, "net self-test: no pong (%s, type=%d)",
+                        sd_strerror(perr), (int)mtype);
+            }
+            sd_transport_close(t);
+        }
+    }
+#endif
 
 #ifdef SUDONIT_PROVISION_CONSOLE
     /* Recovery/provisioning channel: drop into the serial console over the UART.
