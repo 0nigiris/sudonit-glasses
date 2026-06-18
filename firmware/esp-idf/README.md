@@ -40,6 +40,10 @@ idf.py -C firmware/esp-idf build -DSUDONIT_PROVISION_CONSOLE=1
 # Real OV5640 camera driver (esp32-camera). Off by default; see
 # docs/CAMERA_BRINGUP.md for the pin map to verify and the day-one checklist.
 idf.py -C firmware/esp-idf build -DSUDONIT_CAMERA_DRIVER=1
+
+# Real MAX98357A I2S audio-output driver. Off by default; see
+# docs/AUDIO_BRINGUP.md for the I2S pin map / camera pin-conflict analysis.
+idf.py -C firmware/esp-idf build -DSUDONIT_AUDIO_DRIVER=1
 ```
 
 The self-test uses `ping`/`pong` rather than a full image uplink so it does not
@@ -77,7 +81,7 @@ firmware/esp-idf/
 | HAL          | Backend file                    | State                          |
 |--------------|----------------------------------|--------------------------------|
 | camera       | `src/hal/esp32/camera_esp.c`     | OV5640 driver written (behind `-DSUDONIT_CAMERA_DRIVER=1`); default build is a stub. See `docs/CAMERA_BRINGUP.md` |
-| audio        | `src/hal/esp32/audio_esp.c`      | stub — MAX98357A I2S TODO      |
+| audio        | `src/hal/esp32/audio_esp.c`      | MAX98357A I2S driver written (behind `-DSUDONIT_AUDIO_DRIVER=1`); default build is a stub. See `docs/AUDIO_BRINGUP.md` |
 | mic          | `src/hal/esp32/mic_esp.c`        | stub — ICS43434 I2S TODO       |
 | battery      | `src/hal/esp32/battery_esp.c`    | stub — VBAT ADC TODO           |
 | transport    | `src/hal/esp32/transport_wifi.c` | **implemented** — LwIP TCP client |
