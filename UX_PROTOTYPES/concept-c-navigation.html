@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<!--
+  Concept C — Navigation-focused.
+  Thesis: the single best use of a monochrome glance HUD is turn-by-turn — a big
+  shape-coded arrow + distance + street, glanceable in well under a second. Shape
+  carries meaning (survives monochrome), the number is large, everything else is
+  secondary. This is the concept most likely to be genuinely useful on V1 optics.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sudonit · Concept C · Navigation</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .nav { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: center; height: 100%; }
+  .arrow { font-size: 72px; line-height: 1; text-align: center; }
+  .dist  { font-size: 40px; line-height: 1; }
+  .street { font-size: 18px; color: var(--hud); margin-top: 2px; }
+  .then  { font-size: 13px; color: var(--hud-dim); margin-top: 6px; }
+  .arrived { font-size: 30px; text-align:center; width:100%; }
+  .progress { height: 3px; background: var(--hud-faint); margin-top: 8px; border-radius: 2px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--hud); width: 0%; transition: width .4s; }
+</style>
+</head>
+<body>
+<div class="eye">
+  <div class="tag"><b>Concept C</b> · Navigation HUD</div>
+  <a class="home" href="index.html">↩ all concepts</a>
+
+  <div class="panel">
+    <div class="status">
+      <span><span class="dot">●</span> NAV · 14 min</span>
+      <span id="clock">--:--</span>
+    </div>
+    <div class="nav" id="nav">
+      <div class="arrow" id="arrow">↑</div>
+      <div>
+        <div class="dist" id="dist">220<span style="font-size:18px"> m</span></div>
+        <div class="street" id="street">Voorstraat</div>
+        <div class="then" id="then">then ↱ Kerkstraat</div>
+        <div class="progress"><div id="bar"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <kbd>Space</kbd> simulate walking &nbsp;·&nbsp; <kbd>R</kbd> restart route &nbsp;·&nbsp; shape-coded arrow stays readable in monochrome
+  </div>
+</div>
+
+<script>
+// A short canned route. Each step: arrow glyph, street, distance to the maneuver,
+// and the step after (so the wearer can pre-plan without looking again).
+const ROUTE = [
+  { arrow:"↑",  street:"Voorstraat",  then:"then ↱ Kerkstraat",   d:220 },
+  { arrow:"↱",  street:"Kerkstraat",  then:"then ↰ Marktplein",   d:160 },
+  { arrow:"↰",  street:"Marktplein",  then:"then ↑ continue",     d:90  },
+  { arrow:"↑",  street:"Marktplein",  then:"destination ahead",   d:120 },
+  { arrow:"⚑",  street:"Arrived",     then:"De Hoek café",        d:0   },
+];
+let step = 0, dist = ROUTE[0].d, total = ROUTE.reduce((a,s)=>a+s.d,0), walked = 0;
+
+const $=id=>document.getElementById(id);
+function tick(){ const d=new Date();
+  $('clock').textContent = String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+tick(); setInterval(tick,1000);
+
+function render(){
+  const s = ROUTE[step];
+  if (s.arrow === "⚑"){
+    $('nav').innerHTML = '<div class="arrived">⚑ Arrived<br><span class="street">'+s.then+'</span></div>';
+    return;
+  }
+  $('arrow').textContent = s.arrow;
+  $('dist').innerHTML = Math.max(dist,0) + '<span style="font-size:18px"> m</span>';
+  $('street').textContent = s.street;
+  $('then').textContent = s.then;
+  $('bar').style.width = Math.min(100, (walked/total)*100) + '%';
+  // Close to the maneuver → emphasize (a real HUD would also chime / haptic).
+  $('arrow').style.color = dist <= 30 ? 'var(--warn)' : 'var(--hud)';
+}
+function walk(){
+  if (ROUTE[step].arrow === "⚑") return;
+  const stride = 30; dist -= stride; walked += stride;
+  if (dist <= 0){ step++; if (step < ROUTE.length) dist = ROUTE[step].d; }
+  render();
+}
+function restart(){ step=0; dist=ROUTE[0].d; walked=0;
+  $('nav').innerHTML =
+    '<div class="arrow" id="arrow">↑</div><div>'+
+    '<div class="dist" id="dist"></div><div class="street" id="street"></div>'+
+    '<div class="then" id="then"></div><div class="progress"><div id="bar"></div></div></div>';
+  render();
+}
+render();
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); walk(); }
+  if (e.key.toLowerCase() === 'r'){ restart(); }
+});
+</script>
+</body>
+</html>

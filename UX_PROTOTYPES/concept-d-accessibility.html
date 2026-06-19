@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<!--
+  Concept D — Accessibility-focused.
+  Thesis: the most defensible, genuinely-helpful use of these glasses is assistive —
+  live captions of speech for the hard-of-hearing, and large high-contrast readouts.
+  This concept shows live transcription scrolling + an adjustable text size / contrast,
+  because accessibility means the USER controls legibility, not the designer.
+  (Captioning the world is also a humane, non-creepy answer to "why a camera/mic".)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sudonit · Concept D · Accessibility</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .panel { width: 600px; height: 168px; }
+  .caption-wrap { height: 100%; display: flex; flex-direction: column; }
+  .speaker { font-size: 12px; color: var(--hud-dim); letter-spacing:.05em; }
+  .lines { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  .line { font-size: var(--cap, 24px); line-height: 1.25; margin: 1px 0; }
+  .line.prev { color: var(--hud-dim); }
+  .line.live { color: var(--hud); }
+  /* High-contrast mode = pure white on black, max legibility. */
+  body.hc { --hud:#ffffff; --hud-dim:#9aa; }
+  .meta { font-size: 12px; color: var(--hud-dim); display:flex; justify-content:space-between; margin-top:4px; border-top:1px solid var(--hud-faint); padding-top:4px; }
+</style>
+</head>
+<body>
+<div class="eye">
+  <div class="tag"><b>Concept D</b> · Accessibility · live captions</div>
+  <a class="home" href="index.html">↩ all concepts</a>
+
+  <div class="panel">
+    <div class="status">
+      <span><span class="dot">●</span> CAPTIONS</span>
+      <span id="clock">--:--</span>
+    </div>
+    <div class="caption-wrap">
+      <div class="speaker" id="speaker">▶ listening…</div>
+      <div class="lines" id="lines"></div>
+      <div class="meta">
+        <span id="size">text: M</span>
+        <span id="mode">contrast: normal</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <kbd>Space</kbd> play/pause &nbsp;·&nbsp; <kbd>+</kbd>/<kbd>−</kbd> text size &nbsp;·&nbsp; <kbd>C</kbd> high contrast &nbsp;·&nbsp; user controls legibility
+  </div>
+</div>
+
+<script>
+// A scripted conversation to caption. On hardware: phone does speech-to-text and
+// streams caption lines down (DISPLAY_ARCHITECTURE §5 "Stream" tier).
+const SCRIPT = [
+  { who:"Pharmacist", text:"Take one tablet in the morning with food." },
+  { who:"Pharmacist", text:"Avoid grapefruit juice while on this." },
+  { who:"You",        text:"How many days should I continue?" },
+  { who:"Pharmacist", text:"Seven days, even if you feel better sooner." },
+  { who:"Pharmacist", text:"Any rash or swelling — stop and call us." },
+];
+const SIZES = [{l:"S",px:18},{l:"M",px:24},{l:"L",px:32},{l:"XL",px:40}];
+let si = 1, idx = 0, wordN = 0, playing = true;
+
+const $=id=>document.getElementById(id);
+const lines = $('lines');
+function tick(){ const d=new Date();
+  $('clock').textContent = String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+tick(); setInterval(tick,1000);
+
+let history = [];
+function draw(liveText){
+  // Keep only the last few lines — a tiny panel can't scroll forever.
+  const recent = history.slice(-2);
+  lines.innerHTML = recent.map(l=>'<div class="line prev">'+l+'</div>').join('')
+    + (liveText!=null ? '<div class="line live">'+liveText+'</div>' : '');
+}
+
+function step(){
+  if (!playing) return;
+  const cur = SCRIPT[idx % SCRIPT.length];
+  $('speaker').textContent = '▶ ' + cur.who;
+  const words = cur.text.split(' ');
+  wordN++;
+  draw(words.slice(0, wordN).join(' ') + (wordN<words.length ? ' ▋' : ''));
+  if (wordN >= words.length){
+    history.push(cur.text);
+    idx++; wordN = 0;
+  }
+}
+let timer = setInterval(step, 380);
+
+function applySize(){ const s=SIZES[si]; document.documentElement.style.setProperty('--cap', s.px+'px'); $('size').textContent='text: '+s.l; }
+applySize(); draw('');
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); playing=!playing; $('speaker').textContent = playing?'▶ listening…':'⏸ paused'; }
+  if (e.key === '+'||e.key==='='){ si=Math.min(SIZES.length-1,si+1); applySize(); }
+  if (e.key === '-'||e.key==='_'){ si=Math.max(0,si-1); applySize(); }
+  if (e.key.toLowerCase() === 'c'){ document.body.classList.toggle('hc');
+    $('mode').textContent = 'contrast: ' + (document.body.classList.contains('hc')?'high':'normal'); }
+});
+</script>
+</body>
+</html>

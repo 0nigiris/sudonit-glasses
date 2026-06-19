@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<!--
+  Concept B — AR-style HUD.
+  Thesis: overlay glanceable labels on the world. IMPORTANT honesty: a monocular,
+  monochrome, low-res, non-eye-tracked display CANNOT do convincing registered AR
+  (pixel-locked anchors on objects). So this prototype deliberately shows "loose"
+  AR — labels parked in a status frame with a pointer, not pinned to moving objects.
+  It demonstrates how far the HUD idea can realistically go on V1/V2 hardware.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sudonit · Concept B · AR HUD</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  /* Make the panel a bit larger to host multiple HUD regions, but keep it modest. */
+  .panel { width: 560px; height: 150px; }
+  .hud-grid { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: start; }
+  .reticle { color: var(--hud); font-size: 13px; }
+  .label-row { font-size: 15px; margin: 2px 0; }
+  .label-row .pin { color: var(--hud-dim); }
+  .gauge { font-size: 12px; color: var(--hud-dim); text-align: right; white-space: nowrap; }
+  .callout { margin-top: 6px; font-size: 15px; border-top: 1px solid var(--hud-faint); padding-top: 5px; }
+</style>
+</head>
+<body>
+<div class="eye">
+  <div class="scene on" id="scene"></div>
+  <div class="tag"><b>Concept B</b> · AR-style HUD <span class="faint">(loose, not registered — honest)</span></div>
+  <a class="home" href="index.html">↩ all concepts</a>
+
+  <div class="panel">
+    <div class="status">
+      <span><span class="dot">●</span> HUD</span>
+      <span id="head">↑ N · <span id="clock">--:--</span></span>
+    </div>
+    <div class="hud-grid">
+      <div>
+        <div class="reticle">⊕ <span class="dim" id="focus">centre of view</span></div>
+        <div id="labels"></div>
+      </div>
+      <div class="gauge">
+        <div>BATT <span class="dim">78%</span></div>
+        <div>LINK <span class="dim">wifi</span></div>
+        <div id="dist">— m</div>
+      </div>
+    </div>
+    <div class="callout" id="callout"><span class="faint">Look at something and ask for a callout.</span></div>
+  </div>
+
+  <div class="controls">
+    <kbd>Space</kbd> identify focus &nbsp;·&nbsp; <kbd>←</kbd>/<kbd>→</kbd> cycle focus &nbsp;·&nbsp; labels are parked glances, not pixel-locked AR
+  </div>
+</div>
+
+<script>
+// Simulated objects the wearer might glance at. On hardware, the phone's vision
+// model returns these; the HUD parks them as short labels + an optional callout.
+const FOCUS = [
+  { name: "building ahead",  label: "Stadsbibliotheek",   dist: 40, call: "Open until 18:00 · entrance on the left." },
+  { name: "person waving",   label: "contact: Mara",      dist: 6,  call: "Mara — last message 2h ago." },
+  { name: "storefront",      label: "café 'De Hoek'",     dist: 22, call: "4.6★ · oat milk · free wifi." },
+  { name: "street sign",     label: "Voorstraat",         dist: 12, call: "Your turn is the 2nd right." },
+];
+let f = 0;
+
+const clock = document.getElementById('clock');
+const focusEl = document.getElementById('focus');
+const labels = document.getElementById('labels');
+const dist = document.getElementById('dist');
+const callout = document.getElementById('callout');
+
+function tick(){ const d=new Date();
+  clock.textContent = String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+tick(); setInterval(tick,1000);
+
+function render(){
+  const o = FOCUS[f % FOCUS.length];
+  focusEl.textContent = o.name;
+  dist.textContent = o.dist + ' m';
+}
+function identify(){
+  const o = FOCUS[f % FOCUS.length];
+  labels.innerHTML = '<div class="label-row"><span class="pin">⌖</span> ' + o.label + '</div>';
+  callout.textContent = '…';
+  setTimeout(() => { callout.textContent = o.call; }, 700); // phone round-trip
+}
+function cycle(dir){ f = (f + dir + FOCUS.length) % FOCUS.length; render(); labels.innerHTML='';
+  callout.innerHTML = '<span class="faint">Press Space to identify.</span>'; }
+
+render();
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); identify(); }
+  if (e.key === 'ArrowRight'){ cycle(+1); }
+  if (e.key === 'ArrowLeft'){ cycle(-1); }
+});
+</script>
+</body>
+</html>
