@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<!--
+  Sudonit VIRTUAL DEVICE.
+
+  A realistic, runnable simulation of the actual product experience (not a mockup,
+  not just a state-machine probe). It exists to answer one question before hardware
+  arrives: does Sudonit feel useful, frustrating, elegant, or confusing?
+
+  Implements:
+    1. Full user flows for all 8 apps (Camera, Gallery, AI, Notifications, Clock,
+       Calendar, Settings, Home).
+    2. A real connectivity model with THREE independent axes — phone link, internet,
+       AI provider — and graceful degradation for every combination.
+    3. First-time experience: boot → Wi-Fi setup → AI provider setup → tutorial.
+    4. Scripted real-world scenarios (A–E) you can watch play out.
+    5. Live interaction metrics (actions, depth) + a measured clicks-to-feature table.
+
+  Models the architecture in docs/UI_RUNTIME_ARCHITECTURE.md, APP_MODEL.md,
+  UI_STATE_MACHINE.md. Open directly in a browser — no build, no server.
+  Security: the AI key is never displayed or stored as text; only a boolean is kept.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sudonit · Virtual Device</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  body { overflow:auto; }
+  .lab { max-width:1140px; margin:0 auto; padding:24px 20px 64px;
+         display:grid; grid-template-columns:600px 1fr; gap:26px; align-items:start; }
+  @media (max-width:1000px){ .lab{ grid-template-columns:1fr; } }
+  .topbar{ grid-column:1/-1; display:flex; justify-content:space-between; align-items:center; }
+  h1{ color:var(--hud); font-size:20px; letter-spacing:.04em; margin:0; }
+  a.home{ position:static; }
+  .sub{ grid-column:1/-1; color:var(--hud-dim); font-size:13px; margin:-10px 0 2px; }
+
+  .device{ display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .panel{ width:560px; height:176px; }
+  .pcontent{ height:calc(100% - 24px); position:relative; overflow:hidden; }
+
+  .grid8{ display:grid; grid-template-columns:repeat(4,1fr); gap:7px 10px; margin-top:2px; }
+  .tile{ border:1px solid var(--hud-faint); border-radius:6px; padding:6px 4px; text-align:center; font-size:12px; color:var(--hud-dim); }
+  .tile.focus{ border-color:var(--hud); color:var(--hud); background:rgba(56,255,155,0.08); }
+  .tile .ic{ font-size:19px; display:block; }
+  .listrow{ font-size:14px; padding:3px 6px; border-left:3px solid transparent; color:var(--hud-dim); }
+  .listrow.focus{ border-left-color:var(--hud); color:var(--hud); background:rgba(56,255,155,0.06); }
+  .glance{ font-size:12px; color:var(--hud-dim); display:flex; justify-content:space-between; margin-top:5px; border-top:1px solid var(--hud-faint); padding-top:4px; }
+  .center{ display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; gap:4px; }
+  .ovl{ position:absolute; inset:0; background:rgba(0,0,0,0.88); border:1px solid var(--hud); border-radius:6px;
+        display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:10px; }
+  .sleep{ position:absolute; inset:0; background:#000; display:flex; align-items:center; justify-content:center; color:#0c4730; font-size:12px; letter-spacing:.2em; }
+  .hint{ font-size:11px; color:var(--hud-faint); margin-top:4px; }
+  .key{ color:var(--hud-dim); }
+  .warn{ color:var(--warn); }
+  .err{ color:#e8896b; }
+
+  .pad{ display:flex; gap:7px; flex-wrap:wrap; justify-content:center; }
+  button.act{ background:#0d1a14; border:1px solid #1f8f57; color:var(--hud); border-radius:5px; padding:7px 11px; font-family:inherit; font-size:13px; cursor:pointer; }
+  button.act:hover{ background:#13241b; border-color:var(--hud); }
+  button.act small{ color:#4a6b5c; }
+
+  .card2{ border:1px solid var(--hud-faint); border-radius:8px; padding:13px 15px; margin-bottom:16px; }
+  .card2 h3{ margin:0 0 9px; font-size:13px; color:var(--hud); letter-spacing:.06em; text-transform:uppercase; }
+  .card2 label{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:var(--hud-dim); margin:7px 0; }
+  .card2 input[type=range]{ width:150px; accent-color:var(--hud); }
+  .toggle{ cursor:pointer; border:1px solid #1f8f57; border-radius:5px; padding:4px 10px; color:var(--hud); background:#0d1a14; font-size:12px; min-width:118px; text-align:center; }
+  .toggle.off{ color:#86402f; border-color:#86402f; }
+  .btnrow{ display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+  .status-line{ font-size:12px; margin-top:8px; padding-top:8px; border-top:1px solid var(--hud-faint); }
+  .ai-ok{ color:var(--hud); } .ai-bad{ color:#e8896b; }
+
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th,td{ text-align:left; padding:3px 6px; border-bottom:1px solid var(--hud-faint); color:var(--hud-dim); }
+  th{ color:var(--hud); font-weight:normal; }
+  td.n{ text-align:right; color:var(--hud); }
+  td.bad{ color:var(--warn); }
+  .insp b{ color:var(--hud); } .insp .reg{ color:#5a7d6b; }
+  .insp div{ font-size:13px; line-height:1.6; }
+  .log{ margin-top:9px; font-size:11px; color:#4a6b5c; max-height:120px; overflow:auto; border-top:1px solid var(--hud-faint); padding-top:7px; }
+  .scbanner{ min-height:16px; font-size:12px; color:var(--warn); margin-top:6px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="lab">
+  <div class="topbar">
+    <h1>Sudonit · virtual device</h1>
+    <a class="home" href="index.html">↩ all prototypes</a>
+  </div>
+  <div class="sub">Live the product before the hardware. Drive it with the buttons or keyboard; flip connectivity to see graceful
+     degradation; run a scenario; watch the metrics. The goal: know if it feels useful or frustrating <i>now</i>.</div>
+
+  <!-- LEFT: device -->
+  <div class="device">
+    <div class="panel">
+      <div class="status">
+        <span><span class="dot" id="linkdot">●</span> <span id="title">Sudonit</span></span>
+        <span><span id="clock">--:--</span> · <span id="batt">--%</span><span id="chg"></span></span>
+      </div>
+      <div class="pcontent" id="screen"></div>
+    </div>
+    <div class="pad">
+      <button class="act" onclick="input('PREV')">◄ Prev <small>←</small></button>
+      <button class="act" onclick="input('NEXT')">Next ► <small>→</small></button>
+      <button class="act" onclick="input('SELECT')">Select <small>↵</small></button>
+      <button class="act" onclick="input('BACK')">Back <small>⌫</small></button>
+      <button class="act" onclick="input('HOME')">Home <small>h</small></button>
+      <button class="act" onclick="input('PRIMARY')">● Ask/Capture <small>spc</small></button>
+    </div>
+    <div class="hint">Logical actions — on hardware all from <b>one button</b> (short / long / double press). The UI only sees logical actions.</div>
+    <div class="scbanner" id="scbanner"></div>
+  </div>
+
+  <!-- RIGHT: controls + scenarios + metrics + inspector -->
+  <div>
+    <div class="card2">
+      <h3>Connectivity (graceful degradation)</h3>
+      <label>Phone paired <span class="toggle" id="t_phone" onclick="tog('phone')">CONNECTED</span></label>
+      <label>Phone has internet <span class="toggle" id="t_net" onclick="tog('internet')">ONLINE</span></label>
+      <label>AI provider key <span class="toggle" id="t_ai" onclick="tog('aiKey')">CONFIGURED</span></label>
+      <div class="status-line" id="aistatus"></div>
+    </div>
+
+    <div class="card2">
+      <h3>Power &amp; events</h3>
+      <label>Battery <input type="range" id="battslider" min="0" max="100" value="78" oninput="setBattery(this.value)"></label>
+      <label>Charger <span class="toggle off" id="chgtog" onclick="toggleCharger()">UNPLUGGED</span></label>
+      <div class="btnrow">
+        <button class="act" onclick="pushNotify()">Phone → notify</button>
+        <button class="act" onclick="goIdle()">Idle / sleep</button>
+        <button class="act" onclick="syncCal()">Calendar sync</button>
+        <button class="act" onclick="factoryReset()">Factory reset</button>
+      </div>
+    </div>
+
+    <div class="card2">
+      <h3>Real-world scenarios</h3>
+      <div class="btnrow">
+        <button class="act" onclick="scenario('A')">A · "What is this?"</button>
+        <button class="act" onclick="scenario('B')">B · "Read this sign"</button>
+        <button class="act" onclick="scenario('C')">C · Notify in camera</button>
+        <button class="act" onclick="scenario('D')">D · Critical battery</button>
+        <button class="act" onclick="scenario('E')">E · Phone drops</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Each scenario auto-drives the device so you can watch the flow.</div>
+    </div>
+
+    <div class="card2">
+      <h3>Interaction metrics</h3>
+      <div class="insp">
+        <div><span class="reg">actions this session&nbsp;</span> <b id="m_actions">0</b></div>
+        <div><span class="reg">actions since Home&nbsp;&nbsp;&nbsp;</span> <b id="m_since">0</b></div>
+        <div><span class="reg">nav depth (max)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> <b id="m_depth">1</b></div>
+      </div>
+      <table id="paths" style="margin-top:10px"><thead><tr><th>Common task (from Home)</th><th style="text-align:right">min actions</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="card2">
+      <h3>Live state (statechart)</h3>
+      <div class="insp">
+        <div><span class="reg">P · power&nbsp;&nbsp;</span> <b id="sP">BOOT</b></div>
+        <div><span class="reg">U · ui&nbsp;mode</span> <b id="sU">—</b> <span id="sStack" class="reg"></span></div>
+        <div><span class="reg">O · overlay</span> <b id="sO">none</b></div>
+        <div><span class="reg">L · link&nbsp;&nbsp;&nbsp;</span> <b id="sL">—</b></div>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================================================================== *
+ *  Device state
+ * ===================================================================== */
+const LS = 'sudonit_sim_v2';
+const Device = {
+  power:'BOOT',                 // Region P: BOOT|SETUP|ACTIVE|IDLE|LOW_BATT|SHUTDOWN
+  phone:true, internet:true, aiKey:true,   // Region L axes
+  battery:78, charging:false,
+  provisioned:true,            // has the user finished first-run setup?
+  setupStep:0,
+  stack:['home'],              // Region U nav stack
+  overlay:null,                // Region O
+  idleTimer:null,
+  metrics:{ actions:0, since:0, maxDepth:1 },
+};
+const LOW=15, CRIT=5;
+function aiAvailable(){ return Device.phone && Device.internet && Device.aiKey; }
+function aiReason(){ if(!Device.aiKey) return 'AI not set up'; if(!Device.phone) return 'no phone'; if(!Device.internet) return 'no internet'; return 'ready'; }
+
+function log(m){ const el=document.getElementById('log'); el.innerHTML='› '+m+'<br>'+el.innerHTML; }
+function hhmm(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+
+/* persisted: only provisioned flag + non-secret settings (never the AI key text) */
+function save(){ try{ localStorage.setItem(LS, JSON.stringify({provisioned:Device.provisioned, aiKey:Device.aiKey, settings:Stores.settings})); }catch(e){} }
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LS)||'{}');
+  if(s.provisioned!==undefined) Device.provisioned=s.provisioned;
+  if(s.aiKey!==undefined) Device.aiKey=s.aiKey;
+  if(s.settings) Object.assign(Stores.settings, s.settings);
+ }catch(e){} }
+
+/* ===================================================================== *
+ *  Local, device-owned stores (work with no phone)
+ * ===================================================================== */
+const Stores = {
+  notifications:[ {id:1,source:'system',title:'Welcome',body:'Sudonit runs on its own.',ts:Date.now()-3600e3,read:true} ],
+  calendar:[ {ts:Date.now()+3*3600e3,title:'Dentist',loc:'Centrum'}, {ts:Date.now()+26*3600e3,title:'Team sync',loc:'Online'} ],
+  gallery:[],
+  lastSync:Date.now()-1200e3,
+  settings:{ brightness:7, '24h':true, handedness:'left', notify_floor:'low' },
+};
+function unread(){ return Stores.notifications.filter(n=>!n.read).length; }
+function nextEvent(){ return Stores.calendar.filter(e=>e.ts>Date.now()).sort((a,b)=>a.ts-b.ts)[0]; }
+
+/* ===================================================================== *
+ *  Apps (APP_MODEL.md) — full flows
+ * ===================================================================== */
+function focusList(items, idx, render){ return items.map((it,i)=>`<div class="listrow ${i===idx?'focus':''}">${render(it,i)}</div>`).join(''); }
+
+const LAUNCH=['clock','calendar','notify','camera','gallery','settings','ai'];
+const META={ clock:['🕐','Clock'],calendar:['📅','Calendar'],notify:['🔔','Notifs'],camera:['📷','Camera'],
+             gallery:['🖼','Gallery'],settings:['⚙','Settings'],ai:['✦','AI'] };
+
+const APPS = {
+  home:{ title:'Sudonit', focus:0,
+    render(){ const ne=nextEvent();
+      const grid=LAUNCH.map((id,i)=>`<div class="tile ${i===this.focus?'focus':''}"><span class="ic">${META[id][0]}</span>${META[id][1]}${id==='notify'&&unread()?` (${unread()})`:''}</div>`).join('');
+      return `<div class="grid8">${grid}</div>
+        <div class="glance"><span>${hhmm(Date.now())}</span>
+          <span>${ne?('▸ '+ne.title+' '+hhmm(ne.ts)):'no events'}</span>
+          <span>🔔${unread()} · ${Device.battery}%${aiAvailable()?'':' · ◌'}</span></div>`; },
+    action(a){ if(a==='NEXT'){this.focus=(this.focus+1)%LAUNCH.length;return true;}
+      if(a==='PREV'){this.focus=(this.focus-1+LAUNCH.length)%LAUNCH.length;return true;}
+      if(a==='SELECT'){ nav.push(LAUNCH[this.focus]); return true; }
+      if(a==='PRIMARY'){ nav.push('ai'); APPS.ai.ask(); return true; }   // shortcut: ask from anywhere on Home
+      return false; } },
+
+  clock:{ title:'Clock', faces:['digital','analog','world'], f:0,
+    render(){ const t=new Date(); const big=hhmm(Date.now());
+      return `<div class="center"><div class="huge">${big}</div><div class="dim">${t.toDateString()}</div>
+        <div class="hint">face: ${this.faces[this.f]} · <span class="key">Next</span> cycle · <span class="key">Select</span> set alarm</div></div>`; },
+    action(a){ if(a==='NEXT'){this.f=(this.f+1)%3;return true;}
+      if(a==='SELECT'){ Stores.notifications.unshift({id:Date.now(),source:'alarm',title:'Alarm set',body:'07:00 daily',ts:Date.now(),read:false}); raiseNotify('Alarm set · 07:00'); return true;} return false; } },
+
+  calendar:{ title:'Calendar', focus:0,
+    render(){ const ev=Stores.calendar.filter(e=>e.ts>Date.now()).sort((a,b)=>a.ts-b.ts);
+      if(!ev.length) return `<div class="center"><div class="big">No events</div><div class="hint">${Device.phone?'pull a sync from the phone':'reconnect phone to sync'}</div></div>`;
+      return focusList(ev,this.focus,(e)=>`${hhmm(e.ts)}  ${e.title} <span class="dim">· ${e.loc}</span>`)+
+        `<div class="hint">cached on-device · last sync ${hhmm(Stores.lastSync)} ${Device.phone?'':'<span class="warn">(offline — showing cache)</span>'}</div>`; },
+    action(a){ const n=Stores.calendar.filter(e=>e.ts>Date.now()).length;
+      if(a==='NEXT'){this.focus=Math.min(n-1,this.focus+1);return true;}
+      if(a==='PREV'){this.focus=Math.max(0,this.focus-1);return true;} return false; } },
+
+  notify:{ title:'Notifications', focus:0,
+    render(){ if(!Stores.notifications.length) return `<div class="center"><div class="big">No notifications</div></div>`;
+      return focusList(Stores.notifications,this.focus,(n)=>`${n.read?'':'● '}<b>${n.title}</b> <span class="dim">${n.body}</span>`)+
+        `<div class="hint">Select = mark read · stored on-device</div>`; },
+    action(a){ if(a==='NEXT'){this.focus=Math.min(Stores.notifications.length-1,this.focus+1);return true;}
+      if(a==='PREV'){this.focus=Math.max(0,this.focus-1);return true;}
+      if(a==='SELECT'){ const x=Stores.notifications[this.focus]; if(x){x.read=true; log('notify_dismissed id='+x.id+(Device.phone?' → synced':' → local; reconcile later'));} return true;} return false; } },
+
+  camera:{ title:'Camera', modes:['photo','ask-AI'], m:0, flash:0,
+    render(){ const f=this.flash?'#cfe;':'';
+      return `<div class="center" style="${this.flash?'background:#0c2a1c;':''}">
+        <div class="big">📷 ${this.flash?'captured!':'live preview'}</div>
+        <div class="dim">mode: ${this.modes[this.m]} · SVGA · 🔋${Device.battery}%</div>
+        <div class="hint"><span class="key">●</span> capture · <span class="key">Next</span> mode${this.modes[this.m]==='ask-AI'&&!aiAvailable()?' · <span class="warn">AI offline</span>':''}</div></div>`; },
+    action(a){ if(a==='NEXT'){this.m=(this.m+1)%2;return true;}
+      if(a==='PRIMARY'){ const shot={id:Date.now(),ts:Date.now()}; Stores.gallery.unshift(shot);
+        this.flash=1; render(); setTimeout(()=>{this.flash=0;render();},220);
+        if(this.modes[this.m]==='ask-AI'){ nav.push('ai'); APPS.ai.ask(shot,'sign'); } else { raiseNotify('Photo saved'); }
+        return true; } return false; } },
+
+  gallery:{ title:'Gallery', focus:0, open:-1,
+    render(){ if(!Stores.gallery.length) return `<div class="center"><div class="big">Gallery empty</div><div class="hint">capture in Camera</div></div>`;
+      if(this.open>=0){ const g=Stores.gallery[this.open]; return `<div class="center"><div class="big">🖼 ${hhmm(g.ts)}</div><div class="hint">Back to grid${Device.phone?' · Select = send to phone':''}</div></div>`; }
+      const tiles=Stores.gallery.map((g,i)=>`<div class="tile ${i===this.focus?'focus':''}"><span class="ic">🖼</span>${hhmm(g.ts)}</div>`).join('');
+      return `<div class="grid8">${tiles}</div><div class="hint">${Stores.gallery.length} item(s) · on-device · Select to open</div>`; },
+    action(a){ if(this.open>=0){ if(a==='BACK'){this.open=-1;return true;} return true; }
+      if(a==='NEXT'){this.focus=(this.focus+1)%Stores.gallery.length;return true;}
+      if(a==='PREV'){this.focus=(this.focus-1+Stores.gallery.length)%Stores.gallery.length;return true;}
+      if(a==='SELECT'){ this.open=this.focus; return true; } return false; } },
+
+  settings:{ title:'Settings', focus:0,
+    keys(){ return Object.keys(Stores.settings); },
+    render(){ const ks=this.keys();
+      return focusList(ks,this.focus,(k)=>`${k} <span class="dim">· ${Stores.settings[k]}</span>`)+
+        `<div class="hint">Select = change · NVS (device-owned)${Device.phone?' · backed up':''}</div>`; },
+    action(a){ const ks=this.keys();
+      if(a==='NEXT'){this.focus=Math.min(ks.length-1,this.focus+1);return true;}
+      if(a==='PREV'){this.focus=Math.max(0,this.focus-1);return true;}
+      if(a==='SELECT'){ const k=ks[this.focus],v=Stores.settings[k];
+        if(typeof v==='boolean')Stores.settings[k]=!v; else if(typeof v==='number')Stores.settings[k]=(v%10)+1; else Stores.settings[k]=v==='left'?'right':'left';
+        save(); log('setting '+k+'='+Stores.settings[k]); return true;} return false; } },
+
+  ai:{ title:'AI Assistant', mode:'idle', text:'',
+    ask(shot,kind){ if(!aiAvailable()){ this.mode='offline'; this._reason=aiReason();
+        if(shot) log('captured offline → saved to Gallery; '+this._reason); render(); return; }
+      this.mode='thinking'; this.text=''; render();
+      setTimeout(()=>{ const A={ object:'That’s a snake plant — water every 2–3 weeks.',
+          sign:'The sign says the museum closes at 18:00 today.',
+          generic:'Bus 12 to Centrum leaves in 4 minutes.' };
+        this.text=A[kind||'object']; this.mode='answer'; log('ai_answer received (phone extended the device)'); render(); }, 1300); },
+    render(){ if(this.mode==='thinking') return `<div class="center"><div class="big">Looking<span class="cursor"></span></div><div class="hint">phone is running the AI…</div></div>`;
+      if(this.mode==='offline') return `<div class="center"><div class="big err">AI unavailable</div><div class="dim">${this._reason} — capture saved to Gallery</div><div class="hint">graceful, not blank · Back to leave</div></div>`;
+      if(this.mode==='answer') return `<div class="center"><div class="big">${this.text}</div><div class="hint">spoken via audio too · Back to dismiss</div></div>`;
+      return `<div class="center"><div class="big">✦ Ask</div><div class="hint"><span class="key">●</span> to ask about what you see${aiAvailable()?'':' · <span class="warn">'+aiReason()+'</span>'}</div></div>`; },
+    action(a){ if(a==='PRIMARY'){ this.ask(); return true; } return false; } },
+};
+
+/* ===================================================================== *
+ *  First-run setup flow (boot → Wi-Fi → AI provider → tutorial)
+ * ===================================================================== */
+const SETUP = {
+  step:0,
+  nets:['HomeWiFi','Cafe_Guest','Office-5G','(skip — use later)'], netFocus:0,
+  prov:['Claude (recommended)','OpenAI','Local model','(skip)'], provFocus:0,
+  tut:0,
+  steps:['welcome','wifi','provider','tutorial','done'],
+  render(){ const s=this.steps[this.step];
+    if(s==='welcome') return `<div class="center"><div class="huge">✦</div><div class="big">Welcome to Sudonit</div>
+       <div class="hint">an open device that works on its own · <span class="key">Select</span> to begin</div></div>`;
+    if(s==='wifi') return `<div><div class="dim" style="margin-bottom:4px">① Connect to Wi-Fi</div>`+
+       focusList(this.nets,this.netFocus,(n)=>n)+`<div class="hint">Select a network · password entry is simulated</div></div>`;
+    if(s==='provider') return `<div><div class="dim" style="margin-bottom:4px">② AI provider (extends the device)</div>`+
+       focusList(this.prov,this.provFocus,(p)=>p)+`<div class="hint">Your key stays yours · never shown or logged · Select to set</div></div>`;
+    if(s==='tutorial'){ const cards=[
+        ['One button, everything','Short = Select · Long = Back · Double = Next. That’s the whole language.'],
+        ['Look and ask','Press ● to capture what you see and ask the AI for help.'],
+        ['Works offline','Clock, calendar, notes, camera and settings run with no phone.']];
+      const c=cards[this.tut]; return `<div class="center"><div class="big">${c[0]}</div><div class="dim">${c[1]}</div>
+        <div class="hint">${this.tut+1}/3 · <span class="key">Next</span> · <span class="key">Select</span> to finish</div></div>`; }
+    return `<div class="center"><div class="big">All set ✓</div><div class="hint">Select to enter Sudonit</div></div>`; },
+  action(a){ const s=this.steps[this.step];
+    if(s==='welcome'){ if(a==='SELECT')this.step++; return true; }
+    if(s==='wifi'){ if(a==='NEXT'){this.netFocus=(this.netFocus+1)%this.nets.length;}
+      else if(a==='PREV'){this.netFocus=(this.netFocus-1+this.nets.length)%this.nets.length;}
+      else if(a==='SELECT'){ Device.phone=true; Device.internet=!this.nets[this.netFocus].startsWith('(skip'); log('Wi-Fi: '+this.nets[this.netFocus]); this.step++; } return true; }
+    if(s==='provider'){ if(a==='NEXT'){this.provFocus=(this.provFocus+1)%this.prov.length;}
+      else if(a==='PREV'){this.provFocus=(this.provFocus-1+this.prov.length)%this.prov.length;}
+      else if(a==='SELECT'){ Device.aiKey=!this.prov[this.provFocus].startsWith('(skip'); log('AI provider: '+(Device.aiKey?this.prov[this.provFocus]+' (key stored securely)':'skipped')); this.step++; } return true; }
+    if(s==='tutorial'){ if(a==='NEXT'){ this.tut=(this.tut+1)%3; } else if(a==='SELECT'){ this.step++; } return true; }
+    if(s==='done'){ if(a==='SELECT'){ Device.provisioned=true; Device.power='ACTIVE'; save(); log('setup complete → Home'); wake(); } return true; }
+    return true; },
+};
+
+/* ===================================================================== *
+ *  Screen manager + dispatch
+ * ===================================================================== */
+const nav = {
+  active(){ return APPS[Device.stack[Device.stack.length-1]]; },
+  push(id){ Device.stack.push(id); if(id==='ai')APPS.ai.mode='idle'; if(id==='gallery')APPS.gallery.open=-1;
+    Device.metrics.maxDepth=Math.max(Device.metrics.maxDepth,Device.stack.length); log('push → '+id); },
+  pop(){ if(Device.stack.length>1){ log('pop ← '+Device.stack.pop()); } },
+  home(){ Device.stack=['home']; Device.metrics.since=0; log('→ home'); },
+};
+
+function input(action){
+  // metrics
+  Device.metrics.actions++; Device.metrics.since++;
+  wake();
+  if(Device.power==='IDLE'){ render(); return; }
+  if(Device.power==='SETUP'){ SETUP.action(action); render(); return; }
+  if(Device.overlay){
+    if(Device.overlay.modal){ if(action==='SELECT'||action==='BACK') Device.overlay=null; }
+    else Device.overlay=null;
+    render(); return;
+  }
+  const handled = nav.active().action ? nav.active().action(action) : false;
+  if(!handled){ if(action==='BACK') nav.pop(); else if(action==='HOME') nav.home(); }
+  if(Device.stack.length===1) Device.metrics.since=Device.metrics.since; // since resets on home() only
+  render();
+}
+
+/* overlays */
+function raiseNotify(text){ Device.overlay={id:'notify',title:'🔔 Notification',body:text,modal:false}; log('overlay: Notification');
+  render(); clearTimeout(raiseNotify._t); raiseNotify._t=setTimeout(()=>{ if(Device.overlay&&Device.overlay.id==='notify'){Device.overlay=null;render();} },2600); }
+function pushNotify(){ if(!Device.phone){ log('phone notify ignored — no phone (local sources still work)'); return; }
+  Stores.notifications.unshift({id:Date.now(),source:'messages',title:'Mara',body:'see you at 6?',ts:Date.now(),read:false}); raiseNotify('Mara: see you at 6?'); }
+function syncCal(){ if(!Device.phone){ log('calendar sync skipped — no phone (cache still shown)'); return; }
+  Stores.calendar.push({ts:Date.now()+5*3600e3,title:'Dinner',loc:'De Hoek'}); Stores.lastSync=Date.now(); log('calendar_sync ← phone'); render(); }
+
+/* power */
+function setBattery(v){ Device.battery=+v; document.getElementById('battslider').value=v; evalPower(); render(); }
+function toggleCharger(){ Device.charging=!Device.charging; const t=document.getElementById('chgtog');
+  t.textContent=Device.charging?'CHARGING':'UNPLUGGED'; t.classList.toggle('off',!Device.charging);
+  if(Device.charging){ Device.overlay={id:'charging',title:'⚡ Charging',body:Device.battery+'%',modal:false}; log('Region P → CHARGING'); }
+  else if(Device.overlay&&Device.overlay.id==='charging') Device.overlay=null;
+  evalPower(); render(); }
+function evalPower(){
+  if(Device.battery<=CRIT && !Device.charging){ Device.power='LOW_BATT'; Device.overlay={id:'lowbatt',title:'🪫 Critical battery',body:'Charge now',modal:true}; log('Region P → LOW_BATT (critical)'); }
+  else if(Device.battery<=LOW && !Device.charging){ Device.power='LOW_BATT'; if(!Device.overlay)Device.overlay={id:'lowbatt',title:'🔋 Low battery',body:Device.battery+'% — charge soon',modal:false}; }
+  else if(Device.power==='LOW_BATT'){ Device.power='ACTIVE'; if(Device.overlay&&Device.overlay.id==='lowbatt')Device.overlay=null; } }
+function goIdle(){ Device.power='IDLE'; log('Region P → IDLE'); render(); }
+function wake(){ if(Device.power==='IDLE'){ Device.power='ACTIVE'; log('Region P → ACTIVE (woke)'); }
+  clearTimeout(Device.idleTimer); Device.idleTimer=setTimeout(()=>{ if(Device.power==='ACTIVE')goIdle(); }, 30000); }
+
+/* connectivity */
+function tog(axis){ Device[axis]=!Device[axis];
+  if(axis==='aiKey'&&Device.aiKey&&nav.active()===APPS.ai&&APPS.ai.mode==='offline')APPS.ai.mode='idle';
+  if(Device.aiKey)save();
+  log('Region L: '+axis+'='+Device[axis]+(aiAvailable()?' · AI ready':' · AI '+aiReason()));
+  render(); }
+
+/* factory reset → replay first-run */
+function factoryReset(){ localStorage.removeItem(LS); Device.provisioned=false; Device.aiKey=true; Device.phone=true; Device.internet=true;
+  SETUP.step=0; SETUP.tut=0; SETUP.netFocus=0; SETUP.provFocus=0; Device.stack=['home']; Device.overlay=null;
+  Device.power='SETUP'; log('FACTORY RESET → first-run setup'); render(); }
+
+/* ===================================================================== *
+ *  Scenarios (auto-driven)
+ * ===================================================================== */
+function banner(t){ document.getElementById('scbanner').textContent=t||''; }
+function run(steps){ let i=0; (function go(){ if(i>=steps.length){ setTimeout(()=>banner(''),1600); return;} const s=steps[i++];
+  if(s.note!==undefined)banner(s.note); setTimeout(()=>{ if(s.fn)s.fn(); render(); go(); }, s.d||950); })(); }
+
+function ensureReady(){ Device.power='ACTIVE'; Device.provisioned=true; Device.phone=Device.internet=Device.aiKey=true;
+  setBattery(78); Device.charging=false; document.getElementById('chgtog').textContent='UNPLUGGED'; document.getElementById('chgtog').classList.add('off');
+  syncToggles(); nav.home(); render(); }
+
+function scenario(id){
+  ensureReady();
+  if(id==='A') run([
+    {note:'Scenario A — "What is this object?"', fn:()=>{}},
+    {note:'press ● to ask about the view', fn:()=>input('PRIMARY')},
+    {note:'phone runs the AI…', d:1500, fn:()=>{}},
+    {note:'answer (spoken + shown)', d:600, fn:()=>{}},
+    {note:'Back to dismiss', d:1400, fn:()=>input('BACK')},
+  ]);
+  if(id==='B') run([
+    {note:'Scenario B — "Read this sign"', fn:()=>{ nav.home(); }},
+    {note:'open Camera', fn:()=>{ APPS.home.focus=3; input('SELECT'); }},
+    {note:'switch to ask-AI mode', fn:()=>input('NEXT')},
+    {note:'capture the sign', fn:()=>input('PRIMARY')},
+    {note:'reading…', d:1500, fn:()=>{}},
+    {note:'answer', d:1200, fn:()=>input('BACK')},
+  ]);
+  if(id==='C') run([
+    {note:'Scenario C — notification during camera', fn:()=>{ nav.home(); APPS.home.focus=3; input('SELECT'); }},
+    {note:'composing a shot…', d:1100, fn:()=>{}},
+    {note:'a message arrives (overlay)', fn:()=>pushNotify()},
+    {note:'glance, then it auto-clears — camera intact', d:2600, fn:()=>{}},
+    {note:'still in camera, capture', fn:()=>input('PRIMARY')},
+  ]);
+  if(id==='D') run([
+    {note:'Scenario D — battery hits critical', fn:()=>{ nav.home(); }},
+    {note:'draining…', fn:()=>setBattery(3)},
+    {note:'modal warning blocks nothing else important', d:1800, fn:()=>{}},
+    {note:'plug in', fn:()=>{ if(!Device.charging)toggleCharger(); }},
+    {note:'charging — recovered', d:600, fn:()=>setBattery(40)},
+  ]);
+  if(id==='E') run([
+    {note:'Scenario E — phone disconnects mid-use', fn:()=>{ nav.home(); }},
+    {note:'ask while connected', fn:()=>input('PRIMARY')},
+    {note:'answer arrives', d:1600, fn:()=>input('BACK')},
+    {note:'…phone drops', fn:()=>{ Device.phone=false; syncToggles(); }},
+    {note:'ask again → graceful offline', fn:()=>input('PRIMARY')},
+    {note:'but clock/calendar/camera still work', d:1600, fn:()=>{ nav.home(); APPS.home.focus=0; input('SELECT'); }},
+  ]);
+}
+
+/* ===================================================================== *
+ *  Render + metrics + inspector
+ * ===================================================================== */
+function syncToggles(){
+  const set=(id,on,onTxt,offTxt)=>{ const e=document.getElementById(id); if(!e)return; e.textContent=on?onTxt:offTxt; e.classList.toggle('off',!on); };
+  set('t_phone',Device.phone,'CONNECTED','NO PHONE');
+  set('t_net',Device.internet,'ONLINE','OFFLINE');
+  set('t_ai',Device.aiKey,'CONFIGURED','NOT SET');
+  const as=document.getElementById('aistatus');
+  as.innerHTML = aiAvailable()? `<span class="ai-ok">✦ AI ready — full experience</span>`
+    : `<span class="ai-bad">✦ AI unavailable — ${aiReason()}</span> · <span class="dim">local apps unaffected</span>`;
+}
+
+function render(){
+  syncToggles();
+  const inSetup = Device.power==='SETUP';
+  document.getElementById('title').textContent = inSetup?'Setup' : (Device.overlay?Device.overlay.title:nav.active().title);
+  document.getElementById('clock').textContent = hhmm(Date.now());
+  document.getElementById('batt').textContent = Device.battery+'%';
+  document.getElementById('chg').textContent = Device.charging?' ⚡':'';
+  document.getElementById('linkdot').style.color = Device.phone?'var(--hud)':'#86402f';
+
+  const scr=document.getElementById('screen');
+  if(Device.power==='IDLE') scr.innerHTML=`<div class="sleep">— display asleep — press any button —</div>`;
+  else if(inSetup) scr.innerHTML=SETUP.render();
+  else if(Device.overlay) scr.innerHTML=nav.active().render()+`<div class="ovl"><div class="big">${Device.overlay.title}</div><div class="dim">${Device.overlay.body}</div><div class="hint">${Device.overlay.modal?'Select/Back to dismiss':'auto · any key'}</div></div>`;
+  else scr.innerHTML=nav.active().render();
+
+  // inspector + metrics
+  document.getElementById('sP').textContent=Device.power;
+  document.getElementById('sU').textContent=inSetup?('setup:'+SETUP.steps[SETUP.step]):Device.stack[Device.stack.length-1];
+  document.getElementById('sStack').textContent=inSetup?'':('  ['+Device.stack.join(' › ')+']');
+  document.getElementById('sO').textContent=Device.overlay?Device.overlay.id:'none';
+  document.getElementById('sL').textContent=`phone:${Device.phone?'y':'n'} net:${Device.internet?'y':'n'} ai:${Device.aiKey?'y':'n'} → ${aiReason()}`;
+  document.getElementById('m_actions').textContent=Device.metrics.actions;
+  document.getElementById('m_since').textContent=Device.metrics.since;
+  document.getElementById('m_depth').textContent=Device.metrics.maxDepth;
+}
+
+/* clicks-to-feature table — measured from the launcher model (wrap-aware) */
+function dist(id){ const i=LAUNCH.indexOf(id); return Math.min(i, LAUNCH.length-i); }   // optimal NEXT vs PREV
+function buildPaths(){
+  const enter=id=>dist(id)+1;                       // move to tile + SELECT
+  const tasks=[
+    ['Ask AI about the view', 1, false],            // PRIMARY shortcut on Home
+    ['See next event', 0, false],                   // on Home glance
+    ['Open full calendar', enter('calendar'), false],
+    ['Set an alarm', enter('clock')+1, false],
+    ['Read a notification', enter('notify')+1, false],
+    ['Change brightness', enter('settings')+1, true],
+    ['Take a photo', enter('camera')+1, true],
+    ['View last photo', enter('gallery')+2, true],
+  ];
+  const tb=document.querySelector('#paths tbody');
+  tb.innerHTML=tasks.map(([n,c,bad])=>`<tr><td>${n}</td><td class="n ${bad?'bad':''}">${c}</td></tr>`).join('');
+}
+
+/* keyboard */
+window.addEventListener('keydown', e=>{ const m={ArrowRight:'NEXT',ArrowLeft:'PREV',Enter:'SELECT',Backspace:'BACK',' ':'PRIMARY',h:'HOME'};
+  const a=m[e.key]; if(a){ e.preventDefault(); input(a); } });
+
+/* boot */
+function boot(){ load(); buildPaths();
+  log('BOOT: init display → renderer → services → restore stores');
+  setTimeout(()=>{ if(!Device.provisioned){ Device.power='SETUP'; log('first run → setup wizard'); }
+    else { Device.power='ACTIVE'; wake(); } render(); }, 600);
+  setInterval(()=>{ if(Device.power!=='IDLE') render(); }, 10000); }
+render(); boot();
+</script>
+</body>
+</html>
