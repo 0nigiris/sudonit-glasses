@@ -71,4 +71,13 @@ class AnthropicProvider(AIProvider):
         if not text:
             # e.g. a safety refusal — surface something speakable rather than ""
             text = "I wasn't able to describe that image."
-        return AIResult(text=text, provider=self.name, model=response.model)
+        # Token usage is reported by the API; pass it through so the benchmark
+        # can compute real cost per interaction (never hardcoded prices).
+        usage = getattr(response, "usage", None)
+        return AIResult(
+            text=text,
+            provider=self.name,
+            model=response.model,
+            input_tokens=getattr(usage, "input_tokens", None),
+            output_tokens=getattr(usage, "output_tokens", None),
+        )
