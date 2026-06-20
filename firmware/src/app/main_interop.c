@@ -18,6 +18,13 @@
 #include "sudonit/hal/transport.h"
 #include "sudonit/log.h"
 
+/* Host-mock diagnostic hook: how many PCM frames the firmware actually pushed
+ * through the audio HAL. Defined in src/hal/mock/audio_mock.c and present only
+ * in the host build (the esp32 build links audio_esp.c, which has no such hook).
+ * Printed below as machine-readable evidence that the full turn — including the
+ * audio downlink — completed, so an automated test can assert on it. */
+extern size_t sd_audio_mock_frames_played(void);
+
 int main(int argc, char **argv) {
     sd_log_set_level(SD_LOG_INFO);
 
@@ -52,5 +59,9 @@ int main(int argc, char **argv) {
     }
 
     printf("PHONE RESPONSE: %s\n", response);
+    /* Machine-readable evidence for the automated interop test: the turn drove
+     * the camera -> protocol -> phone -> AI -> audio path to completion, and
+     * this many PCM frames were played back through the (mock) audio HAL. */
+    printf("[interop] audio_frames=%zu\n", sd_audio_mock_frames_played());
     return 0;
 }
