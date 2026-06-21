@@ -55,18 +55,17 @@ python3 -m phone.server
 
 It prints the selected AI provider and listens on `127.0.0.1:8765`.
 
-**Terminal B — the glasses simulator (capture + send):**
+**Terminal B — the firmware host loop (capture + send):**
+
+Build the host firmware once, then run the real device loop against the server:
 
 ```bash
-python3 -m simulator.glasses_sim
+cmake -S firmware -B firmware/build && cmake --build firmware/build
+./firmware/build/device_interop 127.0.0.1 8765
 ```
 
-On first run it auto-generates a sample image (`simulator/sample/sample.png`).
-You can also point it at any PNG:
-
-```bash
-python3 -m simulator.glasses_sim path/to/photo.png
-```
+This runs the actual firmware `device.c` (mock camera capture) over the real
+protocol — the same code the ESP32 build links against the hardware backends.
 
 What you'll see: the glasses ping the phone, stream the image over the chunked
 protocol, and receive the AI response back. The phone writes the spoken answer

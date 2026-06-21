@@ -62,6 +62,6 @@ def make_png(out_path: str | Path) -> Path:
 
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "simulator/sample/sample.png"
+    target = sys.argv[1] if len(sys.argv) > 1 else "run/sample.png"
     path = make_png(target)
     print(f"wrote {path} ({path.stat().st_size} bytes)")

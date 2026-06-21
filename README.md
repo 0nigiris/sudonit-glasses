@@ -109,7 +109,7 @@ Areas where help is especially valuable:
 
 # License
 
-To be determined.
+Apache License 2.0 — see [LICENSE](LICENSE).
 
 ---
 

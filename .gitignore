@@ -29,5 +29,3 @@ firmware/esp-idf/dependencies.lock
 .vscode/
 .idea/
 
-# Generated sample (regenerate with tools/make_sample_image.py)
-simulator/sample/sample.png
