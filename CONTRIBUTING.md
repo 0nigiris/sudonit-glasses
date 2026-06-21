@@ -7,16 +7,16 @@ This guide is intentionally short — it will grow as the project does.
 
 Read the project's source of truth, in this order:
 
-1. `MASTER.md` — the highest-level authority (overrides all other docs)
-2. `VISION.md`, `ARCHITECTURE.md`, `ROADMAP.md`
+1. `VISION.md` — why Sudonit exists, principles, the highest-level authority
+2. `PRODUCT.md`, `ARCHITECTURE.md`, `ROADMAP.md`
 3. `PROTOCOL.md` + `protocol/TRANSPORT.md` — the communication contract
 4. `DECISIONS.md` — why things are the way they are
-5. `RUNNING.md` — how to run the prototype
+5. `DEVELOPMENT.md` — how to build, run, and test the prototype
 
-If a change contradicts `MASTER.md`, `MASTER.md` wins — or the change needs to
-update `MASTER.md` first, deliberately.
+If a change contradicts `VISION.md`, `VISION.md` wins — or the change needs to
+update `VISION.md` first, deliberately.
 
-## Principles (from CLAUDE.md / MASTER.md)
+## Principles (from CLAUDE.md / VISION.md)
 
 - Prefer maintainability, readability, modularity, and documentation over clever
   code. If a simple solution works, use the simple solution.

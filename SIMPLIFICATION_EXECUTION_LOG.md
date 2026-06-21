@@ -58,11 +58,72 @@
 
 ---
 
-## Phase 2 — Documentation consolidation
-_(in progress — see progress entries below)_
+## Phase 2 — Documentation consolidation (`DOCS_CONSOLIDATION_PLAN.md`)
+
+Method: each source file was concatenated into its target under a labeled
+`<!-- consolidated from: X -->` divider — **content preserved verbatim, nothing
+dropped** — then the source removed. (Phase 1 of the plan, archiving 21 historical
+files, was already done on the `docs-consolidation` branch this builds on.)
+
+**New consolidated docs created (from merged sources):**
+- `DEVELOPMENT.md` ← RUNNING, TEST_PLAN, IMPLEMENTATION_GAP_REPORT, PRE_HARDWARE_EXECUTION_PLAN, PRE-HARDWARE_STOP_LIST
+- `HARDWARE.md` ← HARDWARE_ARRIVAL_CHECKLIST, HARDWARE_INTEGRATION_PLAN, BOARD_RESOURCES, CAMERA_BRINGUP, AUDIO_BRINGUP, PROVISIONING_PLAN, REFERENCES
+- `VALIDATION.md` ← ASSUMPTION_REGISTER, VALIDATION_BACKLOG, TRUTH_TABLE, RISKS, FAILURE_SCENARIOS, FIRST_REAL_DATA_PLAN, DEMO_METRICS, DEMO_SUCCESS_CRITERIA
+- `DEMO_AND_LAUNCH.md` ← DEMO_SCRIPT, DEMO_VIDEO_PLAN, DEMO_DAY_PLAN, PHOTO_SHOTLIST, LAUNCH_READINESS, FIRST_PUBLIC_POSTS
+
+**Merged into existing canonical docs:** MASTER → `VISION.md`; APP_MODEL + FRAME_ARCHITECTURE → `ARCHITECTURE.md`; MILESTONES + PRE_HARDWARE_ROADMAP → `ROADMAP.md`; CLOUD → `PRODUCT.md`.
+
+**Renamed:** `PROJECT_BRIEF_SUDONIT.md`→`PRODUCT.md`, `WEBSITE_CONTENT_MASTER.md`→`WEBSITE.md`, `docs/MVP_DEFINITION.md`→`MVP.md`.
+
+**Deleted (pure duplicates, content already in canonical docs):** `docs/PRODUCT_VISION.md`, `TOP_RISKS.md`, `QUICK_WINS.md`, `CODE_FIRST_BACKLOG.md`.
+
+**Other:** the entire `docs/` directory was emptied by the merges and removed;
+`CONTRIBUTING.md`'s reading list re-pointed (MASTER→VISION, RUNNING→DEVELOPMENT).
+
+**Result:** active project Markdown **71 → 22** (19 at root + 3 component-scoped),
+with 21 historical files in `archive/`. The 13 "read these" core docs (README, VISION,
+PRODUCT, ARCHITECTURE, MVP, DEVELOPMENT, HARDWARE, VALIDATION, DEMO_AND_LAUNCH, WEBSITE,
+PROTOCOL, DECISIONS, ROADMAP) now cover the project. Content verified preserved
+(consolidated docs are 500–1,400 lines each). Code untouched — build + ctest + pytest
+still green.
 
 ## Phase 3 — Repository structure cleanup
-_(pending)_
+- **`docs/` removed** — its 14 files were merged up into the root core docs (Phase 2).
+- **`simulator/` removed** — dead, superseded by the firmware host loop (Phase 1).
+- **`eval/` vs `tools/`** — both hold dev tooling but serve distinct roles: `tools/` is
+  standalone scripts (`camera_degrade`, `end_to_end_demo`, `make_sample_image`,
+  `run_benchmarks.sh`), `eval/` is the evaluation harness with its own output layout.
+  Their **duplicated logic** (benchmark + degradation) was already collapsed in Phase 1
+  so only one implementation of each remains; keeping the two directories is the clearer
+  split, not duplication. No further merge.
+- **`benchmarks/`** (dataset) and **`run/`** (gitignored output) are single-purpose; kept.
+
+Resulting top-level layout is flat and non-overlapping: `firmware/`, `phone/`,
+`protocol/`, `eval/`, `tools/`, `tests/`, `benchmarks/`, `archive/`.
 
 ## Phase 4 — Technical-debt cleanup
-_(pending)_
+Re-reviewed every source file (the line-by-line pass is in `CODE_SIMPLIFICATION_REPORT.md`).
+All **SAFE NOW** debt was removed in Phase 1. The remaining identified debt is
+**correctly deferred to AFTER HARDWARE** and must not be removed yet without breaking
+the build or pre-empting a planned V1 capability:
+- **mic HAL** (`mic.h`/`mic_mock.c`/`mic_esp.c`) — unused by the loop today, but a planned
+  V1 voice-input path; removing now risks re-adding later.
+- **stub/real driver `#ifdef` branches** (`camera_esp.c`, `audio_esp.c`) — the stub
+  branches keep the default build green; collapse only once real drivers are validated.
+- **ESP-IDF build source-list duplication** — touches a build that can't be validated
+  without the toolchain/board.
+
+No unnecessary abstraction, function, or layer was found that is safe to remove now
+beyond what Phase 1 already did. Deleting any of the above today would break a build or
+remove a load-bearing layer, violating the "never break working code" rule.
+
+## Final tally
+| Metric | Result |
+|---|---|
+| Files removed (code) | 7 |
+| Files removed/merged (docs) | 71 → 22 active (49 fewer; 21 archived, rest merged/deleted) |
+| Directories removed | 2 (`docs/`, `simulator/`) |
+| Python lines removed | ~600 (3,124 → 2,524) |
+| Duplicate tests removed | 20 (all still covered elsewhere) |
+| Build / ctest / pytest | green at every step (4/4 ctest, 33 pytest) |
+| Product-loop behavior | unchanged |
