@@ -12,15 +12,16 @@
 >
 > Status: ☐ open · ▶ in progress · ✅ done (commit) · ⛔ blocked (hardware/env)
 >
-> Last updated: 2026-06-22 — independent verification pass. Found + fixed one
-> previously-missed **P0** (32-bit OOB write, T8). **All P0/P1/P2/P3 tasks now
-> done; only hardware/on-target-toolchain items remain (table below).**
+> Last updated: 2026-06-23 — red-team code review. Found + fixed one
+> previously-missed **P0** (malformed-peer server crash, T9). Earlier passes
+> fixed T1–T8. **All P0/P1/P2/P3 tasks now done; only hardware/on-target-toolchain
+> items remain (table below).**
 
 ---
 
 ## P0 / P1 / P2 / P3 — all cleared ✅
 
-Every non-hardware task is implemented, validated (build + ctest 5/5 + pytest 33 +
+Every non-hardware task is implemented, validated (build + ctest 5/5 + pytest 50 +
 ruff + cppcheck all green), and committed separately. See **✅ Done** below for the
 per-task commit hashes. No open P0/P1/P2/P3 work remains — the only outstanding
 items need real silicon or a validated ESP-IDF toolchain.
@@ -64,6 +65,22 @@ These need real silicon or a validated ESP-IDF build environment; do **not** cha
 ---
 
 ## ✅ Done (verified, with commit)
+
+### Red-team code review pass (trust nothing; re-derive from code)
+- **T9** (P0) · malformed peer input crashed the **entire** phone server —
+  `127bbc9`. `handle_connection` only treats `framing.ProtocolError`/`OSError`
+  as "end this one connection"; any other exception escapes through `serve()`'s
+  `accept()` loop and kills the process, dropping every future connection. Four
+  host-reproducible leak paths were closed at the source (all now `ProtocolError`):
+  `decode_control` on truncated/non-UTF-8/non-object/type-less JSON
+  (`UnicodeDecodeError`/`JSONDecodeError`); `Image`/`AudioReassembler.__init__` on a
+  missing or non-integer `begin` field (`KeyError`/`TypeError`, via new
+  `_require`/`_require_int`); and `…Reassembler.finish()` on a correct chunk *count*
+  but wrong `seq` numbers (`KeyError` in the `range()` join). Added 14 regression
+  cases in `tests/test_framing.py`; 50 pytest + ruff green.
+  *Why previously missed:* prior passes audited the C firmware memory-safety paths;
+  the Python reference server's exception-boundary completeness was never tested —
+  the happy-path image round-trip passed, masking the malformed-input gap.
 
 ### Independent verification pass (challenge "blocked", trust code only)
 - **T8** (P0) · 32-bit integer-overflow → out-of-bounds write in
