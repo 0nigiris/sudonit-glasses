@@ -1,0 +1,14 @@
+# Python dependencies for the Sudonit host-side stack, tooling, and test suite.
+# Install with:  pip install -r requirements-dev.txt
+#
+# Runtime deps are intentionally tiny — the phone server, protocol, and pipeline
+# are pure-Python; only image handling and the (optional) real-AI path pull in
+# third-party packages.
+
+Pillow>=10.0        # image decode/encode for the camera-degrade + eval tooling
+numpy>=1.24         # pixel-level image degradation in tools/camera_degrade.py
+pytest>=7.4         # test runner
+
+# Optional: only needed to run the eval harness against the real Claude API
+# (offline stub provider needs none of this). Uncomment to install.
+# anthropic>=0.39

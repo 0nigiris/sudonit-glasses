@@ -1,0 +1,48 @@
+name: CI
+
+# Build and test on every push and pull request. Fails the run on any build
+# error or failing test, so a red check means "do not merge". No hardware and no
+# API key are required: the host build links the mock HAL backends and the tests
+# use the deterministic offline stub provider.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-build-and-test:
+    name: Host build + ctest + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install C toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
+
+      - name: Configure firmware host build
+        run: cmake -S firmware -B firmware/build
+
+      - name: Build firmware (host target, -Werror)
+        run: cmake --build firmware/build
+
+      - name: Run C unit tests (ctest)
+        run: ctest --test-dir firmware/build --output-on-failure
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run Python tests (pytest)
+        run: python -m pytest -q
