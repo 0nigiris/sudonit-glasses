@@ -47,6 +47,36 @@ jobs:
       - name: Run Python tests (pytest)
         run: python -m pytest -q
 
+  lint:
+    name: Lint + static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: pip install ruff cppcheck
+
+      - name: Ruff (Python lint)
+        run: ruff check phone/ protocol/ eval/ tools/ tests/ firmware/
+
+      - name: cppcheck (C static analysis)
+        # Bug-finding levels (warning + portability). Vendored ESP-IDF managed
+        # components are excluded — only our own firmware sources are analyzed.
+        run: |
+          cppcheck --enable=warning,portability --error-exitcode=1 --inline-suppr \
+            --quiet --suppress=missingIncludeSystem \
+            --suppress=normalCheckLevelMaxBranches \
+            -I firmware/include -I firmware/components/protocol/include \
+            -I firmware/src/app \
+            firmware/src firmware/components/protocol firmware/test \
+            firmware/esp-idf/main/app_main.c
+
   esp-idf-build:
     name: ESP-IDF compile (esp32s3, no hardware)
     runs-on: ubuntu-latest

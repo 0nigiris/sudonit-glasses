@@ -213,8 +213,8 @@ static void test_framing_roundtrip_property(void) {
     if (wire_open(&w) != 0) return;
 
     uint32_t seed = 0xC0FFEEu;
-    uint8_t out[8192];
-    uint8_t in[8192];
+    uint8_t out[8192] = {0};
+    uint8_t in[8192] = {0};
     int mismatches = 0;
 
     for (int iter = 0; iter < 250; ++iter) {
@@ -402,7 +402,7 @@ static void test_audio_body_short_stream_times_out(void) {
     if (wire_open(&w) != 0) return;
     set_short_rcv_timeout(w.fd[0]); /* device side must not hang */
 
-    uint8_t pcm[100];
+    uint8_t pcm[100] = {0};
     char sha[65];
     sd_sha256_hex(pcm, sizeof(pcm), sha);
 

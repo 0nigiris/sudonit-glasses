@@ -6,7 +6,6 @@ import io
 import json
 
 import numpy as np
-import pytest
 from PIL import Image
 
 from tools.camera_degrade import PRESETS, SVGA, DegradeParams, degrade, degrade_file

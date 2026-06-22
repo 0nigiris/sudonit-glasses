@@ -86,7 +86,7 @@ sd_err_t sd_provision_handle_line(sd_provision_session_t *s, const char *line,
 
     char buf[256];
     size_t n = 0;
-    while (line[n] && n < sizeof(buf) - 1) {
+    while (n < sizeof(buf) - 1 && line[n]) { /* bound first, then index */
         buf[n] = line[n];
         ++n;
     }

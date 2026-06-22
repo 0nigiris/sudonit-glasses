@@ -16,7 +16,7 @@ PYTHON       ?= python3
 
 # Quiet, repeatable: default goal builds then tests the whole stack.
 .DEFAULT_GOAL := all
-.PHONY: all ci build configure ctest pytest test eval deps clean esp32 esp32-uplink help
+.PHONY: all ci build configure ctest pytest test eval deps clean esp32 esp32-uplink lint help
 
 ## all: build the host firmware and run C + Python tests (default)
 all: build test
@@ -50,6 +50,17 @@ test: ctest pytest
 ## eval: offline smoke run of the Claude eval harness (stub provider, no key)
 eval:
 	$(PYTHON) -m eval.run_eval --provider stub --variants original --limit 1
+
+## lint: run the same lint + static analysis as CI (needs ruff + cppcheck)
+lint:
+	ruff check phone/ protocol/ eval/ tools/ tests/ firmware/
+	cppcheck --enable=warning,portability --error-exitcode=1 --inline-suppr \
+		--quiet --suppress=missingIncludeSystem \
+		--suppress=normalCheckLevelMaxBranches \
+		-I firmware/include -I firmware/components/protocol/include \
+		-I firmware/src/app \
+		firmware/src firmware/components/protocol firmware/test \
+		firmware/esp-idf/main/app_main.c
 
 ## clean: remove the host build directory
 clean:
