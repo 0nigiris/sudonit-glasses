@@ -159,3 +159,21 @@ def test_firmware_loop_completes_a_real_turn(interop_binary, tmp_path):
         f"played {played} frames, expected {FAKE_TTS_FRAMES} "
         "(PCM lost or miscounted across the protocol downlink)"
     )
+
+    # The firmware reported per-stage latency + sizes for the turn. We assert the
+    # instrumentation is present and self-consistent (not the absolute timings,
+    # which are environment-dependent): every field parses, the image actually
+    # had bytes, the AI response had length, and total >= each stage.
+    metrics = re.search(
+        r"capture_ms=(\d+) upload_ms=(\d+) response_ms=(\d+) total_ms=(\d+) "
+        r"image_bytes=(\d+) response_bytes=(\d+)",
+        proc.stdout,
+    )
+    assert metrics, f"firmware did not report uplink metrics:\n{proc.stdout}"
+    capture_ms, upload_ms, response_ms, total_ms, image_bytes, response_bytes = (
+        int(g) for g in metrics.groups()
+    )
+    assert image_bytes > 0, "instrumented image_bytes was zero"
+    assert response_bytes > 0, "instrumented response_bytes was zero"
+    assert total_ms >= capture_ms, "total latency is less than the capture stage"
+    assert total_ms >= response_ms, "total latency is less than the response stage"

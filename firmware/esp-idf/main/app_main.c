@@ -108,10 +108,16 @@ void app_main(void) {
             /* Full V1 turn: capture -> stream to phone -> AI response -> play the
              * audio downlink. Identical code path to the host interop build. */
             char response[512];
+            sd_uplink_metrics_t m = {0};
             sd_err_t uerr =
-                sd_device_run_uplink(t, "capture", response, sizeof(response));
+                sd_device_run_uplink(t, "capture", response, sizeof(response), &m);
             if (uerr == SD_OK) {
                 SD_LOGI(TAG, "uplink: turn complete — response: %s", response);
+                SD_LOGI(TAG, "uplink latency: capture=%ums upload=%ums "
+                             "response=%ums total=%ums (image %zuB)",
+                        (unsigned)m.capture_ms, (unsigned)m.upload_ms,
+                        (unsigned)m.response_ms, (unsigned)m.total_ms,
+                        m.image_bytes);
             } else {
                 SD_LOGE(TAG, "uplink: turn failed: %s (capture is stubbed until "
                              "-DSUDONIT_CAMERA_DRIVER=1)",

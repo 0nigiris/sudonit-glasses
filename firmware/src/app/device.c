@@ -1,6 +1,10 @@
+/* clock_gettime(CLOCK_MONOTONIC) for uplink latency instrumentation. */
+#define _POSIX_C_SOURCE 200809L
+
 #include "device.h"
 
 #include <stdlib.h>
+#include <time.h>
 
 #include "sudonit/hal/audio.h"
 #include "sudonit/hal/battery.h"
@@ -10,6 +14,26 @@
 #include "sudonit/protocol/messages.h"
 
 static const char *TAG = "device";
+
+/* Monotonic milliseconds for latency measurement. CLOCK_MONOTONIC exists on both
+ * the host (POSIX) and the ESP32 (newlib), so the same instrumentation runs
+ * unchanged on hardware. Stage deltas stay correct across the 32-bit wrap. */
+static uint32_t now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint32_t)((uint32_t)ts.tv_sec * 1000u + (uint32_t)(ts.tv_nsec / 1000000));
+}
+
+/* Close out the timing for a turn that reached the end (response + total). */
+static void finalize_metrics(sd_uplink_metrics_t *m, uint32_t t_start,
+                             uint32_t t_upload_done) {
+    if (!m) {
+        return;
+    }
+    uint32_t now = now_ms();
+    m->response_ms = now - t_upload_done;
+    m->total_ms = now - t_start;
+}
 
 sd_err_t sd_device_init(void) {
     sd_err_t err = sd_camera_init();
@@ -102,28 +126,42 @@ static sd_err_t play_audio_downlink(sd_transport_t *t, const char *begin_json) {
 }
 
 sd_err_t sd_device_run_uplink(sd_transport_t *t, const char *image_id,
-                              char *response_out, size_t response_cap) {
+                              char *response_out, size_t response_cap,
+                              sd_uplink_metrics_t *metrics) {
     if (!t || !image_id) {
         return SD_ERR_INVALID;
     }
     if (response_out && response_cap > 0) {
         response_out[0] = '\0';
     }
+    if (metrics) {
+        *metrics = (sd_uplink_metrics_t){0};
+    }
 
+    uint32_t t_start = now_ms();
     sd_image_t img = {0};
     sd_err_t err = sd_camera_capture(&img);
     if (err != SD_OK) {
         SD_LOGE(TAG, "uplink capture failed: %s", sd_strerror(err));
         return err;
     }
+    uint32_t t_capture_done = now_ms();
     SD_LOGI(TAG, "uplink: captured %ux%u %s (%zu bytes)", img.width, img.height,
             img.media_type, img.len);
+    if (metrics) {
+        metrics->capture_ms = t_capture_done - t_start;
+        metrics->image_bytes = img.len;
+    }
 
     err = sd_msg_send_image(t, image_id, img.data, img.len, img.media_type);
     sd_camera_release(&img);
     if (err != SD_OK) {
         SD_LOGE(TAG, "uplink send failed: %s", sd_strerror(err));
         return err;
+    }
+    uint32_t t_upload_done = now_ms();
+    if (metrics) {
+        metrics->upload_ms = t_upload_done - t_capture_done;
     }
 
     /* Read control replies until the phone signals playback (end of turn). */
@@ -137,6 +175,12 @@ sd_err_t sd_device_run_uplink(sd_transport_t *t, const char *image_id,
         }
         if (type == SD_MSG_AI_RESPONSE) {
             SD_LOGI(TAG, "uplink: ai_response: %s", text);
+            if (metrics) {
+                metrics->response_bytes = 0;
+                while (text[metrics->response_bytes]) {
+                    metrics->response_bytes++;
+                }
+            }
             if (response_out && response_cap > 0) {
                 /* Hand the AI text back to the application layer. */
                 size_t i = 0;
@@ -148,9 +192,12 @@ sd_err_t sd_device_run_uplink(sd_transport_t *t, const char *image_id,
         } else if (type == SD_MSG_AUDIO_BEGIN) {
             /* The phone is streaming rendered speech as PCM: receive and play it.
              * This is the end of the turn. */
-            return play_audio_downlink(t, text);
+            err = play_audio_downlink(t, text);
+            finalize_metrics(metrics, t_start, t_upload_done);
+            return err;
         } else if (type == SD_MSG_PLAY_AUDIO) {
             SD_LOGI(TAG, "uplink: play_audio (turn complete)");
+            finalize_metrics(metrics, t_start, t_upload_done);
             return SD_OK;
         } else if (type == SD_MSG_ERROR) {
             SD_LOGE(TAG, "uplink: phone error: %s", text);

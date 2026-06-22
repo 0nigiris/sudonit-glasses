@@ -50,7 +50,9 @@ int main(int argc, char **argv) {
     }
 
     char response[1024];
-    sd_err_t err = sd_device_run_uplink(t, "capture", response, sizeof(response));
+    sd_uplink_metrics_t metrics = {0};
+    sd_err_t err =
+        sd_device_run_uplink(t, "capture", response, sizeof(response), &metrics);
     sd_transport_close(t);
 
     if (err != SD_OK) {
@@ -63,5 +65,14 @@ int main(int argc, char **argv) {
      * the camera -> protocol -> phone -> AI -> audio path to completion, and
      * this many PCM frames were played back through the (mock) audio HAL. */
     printf("[interop] audio_frames=%zu\n", sd_audio_mock_frames_played());
+    /* Per-stage latency + sizes for the turn (one machine-readable line). On the
+     * host the absolute numbers are dominated by the in-process stub; the value
+     * is the same instrumentation running unchanged on hardware (real Wi-Fi + AI)
+     * to produce the first real latency budget. */
+    printf("[interop] capture_ms=%u upload_ms=%u response_ms=%u total_ms=%u "
+           "image_bytes=%zu response_bytes=%zu\n",
+           (unsigned)metrics.capture_ms, (unsigned)metrics.upload_ms,
+           (unsigned)metrics.response_ms, (unsigned)metrics.total_ms,
+           metrics.image_bytes, metrics.response_bytes);
     return 0;
 }

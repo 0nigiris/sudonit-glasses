@@ -21,6 +21,19 @@ typedef struct {
     uint8_t battery_percent;
 } sd_device_status_t;
 
+/* Per-stage timing and sizes for one uplink turn. Filled by
+ * sd_device_run_uplink when a non-NULL pointer is passed, so the host loop (and
+ * the device on hardware) can report real latency without a profiler. All times
+ * are wall-clock milliseconds from a monotonic clock. */
+typedef struct {
+    uint32_t capture_ms;     /* camera capture */
+    uint32_t upload_ms;      /* streaming the image to the phone */
+    uint32_t response_ms;    /* upload-done -> end of turn (AI + audio downlink) */
+    uint32_t total_ms;       /* whole turn, capture through playback */
+    size_t image_bytes;      /* bytes streamed to the phone */
+    size_t response_bytes;   /* length of the AI text answer */
+} sd_uplink_metrics_t;
+
 /* Initialize all HAL subsystems the device uses. */
 sd_err_t sd_device_init(void);
 
@@ -35,8 +48,12 @@ sd_err_t sd_device_capture_cycle(sd_device_status_t *status);
  * AI text back to the application layer in `response_out` (NUL-terminated,
  * truncated to `response_cap`). This is the firmware half of the core loop,
  * proven against the real Python phone server with no ESP32 hardware.
+ *
+ * If `metrics` is non-NULL it is filled with per-stage latency and sizes for the
+ * turn (see sd_uplink_metrics_t); pass NULL to skip instrumentation.
  */
 sd_err_t sd_device_run_uplink(sd_transport_t *t, const char *image_id,
-                              char *response_out, size_t response_cap);
+                              char *response_out, size_t response_cap,
+                              sd_uplink_metrics_t *metrics);
 
 #endif /* SUDONIT_APP_DEVICE_H */
