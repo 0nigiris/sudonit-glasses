@@ -46,3 +46,31 @@ jobs:
 
       - name: Run Python tests (pytest)
         run: python -m pytest -q
+
+  esp-idf-build:
+    name: ESP-IDF compile (esp32s3, no hardware)
+    runs-on: ubuntu-latest
+    # Official ESP-IDF image, pinned to the version in dependencies.lock (5.2).
+    # This is a compile-only check — `idf.py build` does not flash or need a board.
+    container:
+      image: espressif/idf:release-v5.2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build firmware (default stub backends)
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py -C firmware/esp-idf set-target esp32s3
+          idf.py -C firmware/esp-idf build
+
+      - name: Build firmware (full uplink loop wired)
+        # Compiles the SUDONIT_RUN_UPLINK + SUDONIT_NET_SELFTEST data-plane paths
+        # so the wired capture->AI->audio loop is proven to compile on-target,
+        # not just on the host.
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py -C firmware/esp-idf fullclean
+          idf.py -C firmware/esp-idf build -DSUDONIT_RUN_UPLINK=1 -DSUDONIT_NET_SELFTEST=1
