@@ -236,6 +236,37 @@ static void test_framing_roundtrip_property(void) {
     wire_close(&w);
 }
 
+/* Regression for the heap receive buffer (T1): a near-cap multi-KB ai_response
+ * control frame must be received and parsed end to end. The other tests use
+ * short stub answers, so this is the only one that drives sd_msg_recv near its
+ * 8 KB cap — exactly the path that overflowed the stack before the fix. Locks it
+ * in so the stack->heap change can't silently regress. */
+static void test_recv_large_ai_response(void) {
+    struct wire w;
+    if (wire_open(&w) != 0) return;
+
+    /* {"type":"ai_response","text":"AAA...AAA"} just under the 8191-byte cap. */
+    enum { TEXT_LEN = 7000 };
+    static char text[TEXT_LEN + 1];
+    memset(text, 'A', TEXT_LEN);
+    text[TEXT_LEN] = '\0';
+
+    static char json[8192];
+    int n = snprintf(json, sizeof(json),
+                     "{\"type\":\"ai_response\",\"text\":\"%s\"}", text);
+    CHECK(n > 0 && (size_t)n < (int)sizeof(json), "large ai_response JSON fits");
+    CHECK(sd_frame_send(w.b, SD_KIND_JSON, (const uint8_t *)json, (size_t)n) == SD_OK,
+          "send a near-cap ai_response frame");
+
+    sd_msg_type_t type = SD_MSG_UNKNOWN;
+    static char out[8192];
+    CHECK(sd_msg_recv(w.a, &type, out, sizeof(out)) == SD_OK,
+          "recv parses a near-cap control frame through the heap buffer");
+    CHECK(type == SD_MSG_AI_RESPONSE, "large frame classified as ai_response");
+    CHECK(strlen(out) == TEXT_LEN, "full multi-KB text recovered intact");
+    wire_close(&w);
+}
+
 /* --- audio downlink reassembly: corruption + truncation ------------------ */
 
 /* Send a binary chunk [seq:uint32 BE][data] on `t`. */
@@ -423,6 +454,7 @@ int main(void) {
     test_recv_truncated_payload();
     test_recv_zero_length_frame();
     test_framing_roundtrip_property();
+    test_recv_large_ai_response();
 
     test_audio_body_bad_sha();
     test_audio_body_chunk_corruption();
