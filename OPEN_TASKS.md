@@ -20,16 +20,18 @@ Origin: the pre-hardware plan (now in `DEVELOPMENT.md`). Status updated as each 
 
 | # | Task | Output | Blocked by HW? | Status |
 |---|------|--------|----------------|--------|
-| A | CI: host build + ctest + pytest | `.github/workflows/ci.yml` | no | ☐ |
-| B | Protocol robustness/property tests | `firmware/test/test_robustness.c` | no | ☐ |
-| C | CI: ESP-IDF compile-only job | job in `ci.yml` | no | ☐ |
-| D | Wire `app_main → sd_device_run_uplink` behind a flag | `app_main.c` + `main/CMakeLists.txt` | no | ☐ |
-| E | Latency/size instrumentation in the host loop | `device.c` / `main_interop.c` | no | ☐ |
-| F | Build automation (one-command build+test) | `Makefile` | no | ☐ |
-| G | Lint / static analysis in CI | job in `ci.yml` | no | ☐ |
+| A | CI: host build + ctest + pytest | `.github/workflows/ci.yml` | no | ✅ `9ff4228` |
+| B | Protocol robustness/property tests | `firmware/test/test_robustness.c` | no | ✅ `d2c74a4` |
+| C | CI: ESP-IDF compile-only job | job in `ci.yml` | no | ✅ `2551a1c` |
+| D | Wire `app_main → sd_device_run_uplink` behind a flag | `app_main.c` + `main/CMakeLists.txt` | no | ✅ `dd77d75` |
+| E | Latency/size instrumentation in the host loop | `device.c` / `main_interop.c` | no | ✅ `2df7bf6` |
+| F | Build automation (one-command build+test) | `Makefile` | no | ✅ `3c2aa69` |
+| G | Lint / static analysis in CI | job in `ci.yml` | no | ✅ `192a876` |
 
-Each item is committed separately and validated (host build + ctest + pytest green)
-before the next. Progress is reported per batch.
+**Queue complete.** Every item committed separately and validated (host build +
+ctest 5/5 + pytest 33 green) before the next. The remaining non-hardware
+pre-hardware code work is done; what is left is genuinely blocked on silicon
+(below). Run everything locally with `make ci && make lint`.
 
 ---
 
