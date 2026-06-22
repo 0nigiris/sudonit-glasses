@@ -161,7 +161,7 @@ static void test_recv_truncated_header(void) {
 
     uint8_t partial[2] = {SD_KIND_JSON, 0};
     write_raw(w.fd[1], partial, sizeof(partial));
-    close(w.fd[1]); /* EOF before the 5-byte header completes */
+    sd_transport_close(w.b); /* EOF before the 5-byte header completes (closes fd[1] once) */
 
     char kind = 0;
     uint8_t buf[16];
@@ -169,7 +169,6 @@ static void test_recv_truncated_header(void) {
     CHECK(sd_frame_recv(w.a, &kind, buf, sizeof(buf), &len) == SD_ERR_IO,
           "recv fails on truncated header");
     sd_transport_close(w.a);
-    sd_transport_close(w.b);
 }
 
 static void test_recv_truncated_payload(void) {
@@ -181,7 +180,7 @@ static void test_recv_truncated_payload(void) {
     write_raw(w.fd[1], hdr, sizeof(hdr));
     uint8_t some[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     write_raw(w.fd[1], some, sizeof(some));
-    close(w.fd[1]);
+    sd_transport_close(w.b); /* EOF after a partial payload (closes fd[1] once) */
 
     char kind = 0;
     uint8_t buf[256];
@@ -189,7 +188,6 @@ static void test_recv_truncated_payload(void) {
     CHECK(sd_frame_recv(w.a, &kind, buf, sizeof(buf), &len) == SD_ERR_IO,
           "recv fails on truncated payload");
     sd_transport_close(w.a);
-    sd_transport_close(w.b);
 }
 
 static void test_recv_zero_length_frame(void) {
