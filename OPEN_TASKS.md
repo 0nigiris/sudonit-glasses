@@ -61,6 +61,17 @@ These need real silicon or a validated ESP-IDF build environment; do **not** cha
 - **CI never executed on GitHub** — host + lint + esp-idf jobs are validated locally only;
   first PR will be the real test (esp-idf-build most likely to fail first — see H7).
 - **`device.c text[1024]`** stack local is acceptable on 3584 B once T1 removes the 8 KB peak.
+- **32-char SSID truncation (latent, hardware-path, untestable locally).** `net_esp.c:99`
+  copies the SSID with `strncpy(..., sizeof(wifi_cfg.sta.ssid) - 1)` = 31 bytes, NUL-
+  terminating at 31. `wifi_config_t.sta.ssid` is 32 bytes and an 802.11 SSID may use all
+  32 (the field is not required to be NUL-terminated). A maximal 32-char SSID would lose
+  its last character and fail to associate. Deliberately left unchanged: the `esp_wifi`
+  semantics for a non-NUL-terminated 32-byte `ssid` field cannot be verified without the
+  IDF headers/toolchain (not installed locally — see H7), and changing a Wi-Fi bring-up
+  path blind risks a worse bug (esp_wifi reading past a 32-byte field with no NUL). Fix
+  when H4 (Wi-Fi bring-up on silicon) is worked: copy `min(strlen, 32)` bytes and rely on
+  the zero-initialized `wifi_cfg` for the terminator, validated against a 32-char SSID on
+  real hardware.
 
 ---
 
