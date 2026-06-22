@@ -33,8 +33,8 @@ update `VISION.md` first, deliberately.
 4. **Document as you go.** If you add a protocol message, register it in
    `protocol/messages.py` (`KNOWN_TYPES`) **and** document it in `PROTOCOL.md`
    before implementing it — this rule is non-negotiable.
-5. **Update the docs you touch** — `ROADMAP.md`, `DECISIONS.md` (for notable
-   technical decisions), `MILESTONES.md` (for completed milestones).
+5. **Update the docs you touch** — `ROADMAP.md` (includes completed milestones),
+   `DECISIONS.md` (for notable technical decisions).
 
 ## Tests
 

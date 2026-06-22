@@ -411,9 +411,10 @@ hardware is present.
   silicon); `camera_esp.c` + `audio_esp.c` have **real drivers behind build flags**
   (`SUDONIT_CAMERA_DRIVER` / `SUDONIT_AUDIO_DRIVER`), honest stubs otherwise;
   `battery_esp.c` + `mic_esp.c` are pure stubs (`SD_ERR_UNSUPPORTED`).
-- **Tooling/benchmarks** — `tools/` has `ai_benchmark.py`, `camera_degrade.py` (rich
-  degradation presets), `end_to_end_demo.py`, `make_sample_image.py`; `benchmarks/` holds
-  a 4-tier × 4-scene degraded-image dataset (16 images + sources).
+- **Tooling/benchmarks** — `tools/` has `camera_degrade.py` (rich degradation presets),
+  `end_to_end_demo.py`, `make_sample_image.py`, `run_benchmarks.sh`; the AI evaluation
+  harness lives in `eval/run_eval.py`; `benchmarks/` holds a 4-tier × 4-scene
+  degraded-image dataset (16 images + sources).
 - **CI** — only `claude.yml` and `claude-code-review.yml`. **No build/test CI exists.**
   This is the single biggest gap.
 
@@ -431,7 +432,7 @@ Hours are focused-effort estimates.
 | **3** | **CI: ESP-IDF compile job.** Action using the `espressif/idf` Docker image: `idf.py build` of the firmware — both the default (stub) build and a `-D SUDONIT_*_DRIVER` flagged build. Compile only, no flashing. | 3–5 | Docker image; #1 ideally first | Catches firmware/driver compile breakage continuously. Guarantees the flagged-driver build still compiles so June 29 isn't a build-debug day. | **No** (compile, not run) |
 | **4** | **Wire `app_main.c` → `sd_device_run_uplink` behind a flag** (e.g. `SUDONIT_FULL_LOOP`), alongside/replacing the ping-pong self-test. | 2–3 | #3 to keep it compiling; logically follows the existing self-test | The full capture→AI→audio loop becomes flash-and-run the instant the camera/audio driver flags are on. Removes day-one coding from the critical path. | **No** to write; validation is HW |
 | **5** | **Degraded-image interop matrix test.** Drive the existing `benchmarks/` images (4 tiers) through the host pipeline / firmware loop; assert it survives every tier without crashing or mis-framing. | 3 | reuses #2 harness + `benchmarks/` | Proves the demo path is robust to *realistic* bad camera input (blur/low-light/noise) before a real camera exists. Turns the dataset into a regression guard. | **No** |
-| **6** | **Claude evaluation harness + golden dataset.** Extend `ai_benchmark.py`: a golden expected-answer set for the 16 benchmark images and a scorer (does the answer name the key object?). Runs against `AnthropicProvider`. | 4–6 | needs `ANTHROPIC_API_KEY` to *run* (not to build); reuses `benchmarks/` | Repeatable, scored AI-quality measurement that slots real captured images in later. Builds the harness now; produces real numbers the moment a key is available. **Do not fabricate metrics.** | **No** (gated on API key, not HW) |
+| **6** | **Claude evaluation harness + golden dataset.** Extend `eval/run_eval.py`: a golden expected-answer set for the 16 benchmark images and a scorer (does the answer name the key object?). Runs against `AnthropicProvider`. | 4–6 | needs `ANTHROPIC_API_KEY` to *run* (not to build); reuses `benchmarks/` | Repeatable, scored AI-quality measurement that slots real captured images in later. Builds the harness now; produces real numbers the moment a key is available. **Do not fabricate metrics.** | **No** (gated on API key, not HW) |
 | **7** | **Latency / size instrumentation in the host loop.** Add timing + payload-size capture to a host run (capture→send→AI→audio) emitting a machine-readable line. | 2–3 | reuses `device_interop` | A baseline performance harness; the *same* tool ingests hardware numbers later, so HW latency is measured, not guessed. Targets the #2 risk (latency). | **No** (baseline); real numbers HW |
 | **8** | **Build automation script / Makefile.** One command: configure+build host, run `ctest` + `pytest`, optional `idf.py build`. | 1–2 | none | Lowers contributor friction; the same script backs the CI in #1. Makes "clone → green tests" trivial (supports the README fix). | **No** |
 | **9** | **Static analysis / lint in CI.** `clang-format`/`clang-tidy` for C, `ruff` for Python, wired into #1. | 2 | #1 | Cheap, continuous quality signal; catches whole classes of bugs without hardware. A green badge is also a trust signal for contributors. | **No** |
