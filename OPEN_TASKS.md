@@ -1,68 +1,76 @@
 # OPEN_TASKS.md
 
-> Single living backlog of every task you've given me that is **not fully finished**.
-> Purpose (your words): new ideas keep arriving while old ones stay half-done — this file
-> is the one place that tracks what's still open, so nothing gets lost.
+> **The single source of truth for outstanding work.** Authority is this file —
+> not memory, not prior reports, not assumptions. Every task carries Priority,
+> Status, hardware-block flag, effort, and dependencies.
 >
-> **How to read it:** items are grouped by status. Each has its origin, what's actually
-> left, any blocker, and the next concrete action. When something is finished, move it to
-> "Done" at the bottom. Keep this file honest.
+> Priority key (P0 highest):
+> - **P0** — bugs, correctness, build failures, CI failures, hardware bring-up risks
+> - **P1** — tests, automation, tooling, validation, benchmarks
+> - **P2** — cleanup, simplification, dead-code removal, deduplication
+> - **P3** — documentation polish
 >
-> Last updated: 2026-06-22 (reconciled with branch `repo-simplification`; pre-hardware
-> code execution started).
+> Status: ☐ open · ▶ in progress · ✅ done (commit) · ⛔ blocked (hardware/env)
+>
+> Last updated: 2026-06-22 — maintainer pass complete. **All P0/P1/P2/P3 tasks
+> done; only hardware/on-target-toolchain items remain (table below).**
 
 ---
 
-## 🟢 Execution queue — unfinished CODE tasks (in priority order)
+## P0 / P1 / P2 / P3 — all cleared ✅
 
-This is the live queue. Every item produces code / tests / CI / automation — not prose.
-Origin: the pre-hardware plan (now in `DEVELOPMENT.md`). Status updated as each lands.
-
-| # | Task | Output | Blocked by HW? | Status |
-|---|------|--------|----------------|--------|
-| A | CI: host build + ctest + pytest | `.github/workflows/ci.yml` | no | ✅ `9ff4228` |
-| B | Protocol robustness/property tests | `firmware/test/test_robustness.c` | no | ✅ `d2c74a4` |
-| C | CI: ESP-IDF compile-only job | job in `ci.yml` | no | ✅ `2551a1c` |
-| D | Wire `app_main → sd_device_run_uplink` behind a flag | `app_main.c` + `main/CMakeLists.txt` | no | ✅ `dd77d75` |
-| E | Latency/size instrumentation in the host loop | `device.c` / `main_interop.c` | no | ✅ `2df7bf6` |
-| F | Build automation (one-command build+test) | `Makefile` | no | ✅ `3c2aa69` |
-| G | Lint / static analysis in CI | job in `ci.yml` | no | ✅ `192a876` |
-
-**Queue complete.** Every item committed separately and validated (host build +
-ctest 5/5 + pytest 33 green) before the next. The remaining non-hardware
-pre-hardware code work is done; what is left is genuinely blocked on silicon
-(below). Run everything locally with `make ci && make lint`.
+Every non-hardware task is implemented, validated (build + ctest 5/5 + pytest 33 +
+ruff + cppcheck all green), and committed separately. See **✅ Done** below for the
+per-task commit hashes. No open P0/P1/P2/P3 work remains — the only outstanding
+items need real silicon or a validated ESP-IDF toolchain.
 
 ---
 
-## 🟢 Blocked on hardware (June 29 — not actionable yet)
-Tracked so they're not forgotten, but correctly deferred (see `HARDWARE.md` +
-`VALIDATION.md`):
-- Validate camera/audio drivers on real OV5640 / MAX98357A; implement battery ADC + mic I2S.
-- Prove Wi-Fi bring-up on silicon; brownout / power-stability test (#1 risk).
-- Real latency / battery / thermal numbers; the first real captured image + the live demo turn.
-- Run the eval harness against **real Claude** (needs `ANTHROPIC_API_KEY`) for real cost/quality
-  numbers — harness is built (`eval/`), just needs the key.
-- After validation: collapse the stub/real driver `#ifdef`s and decide the mic HAL's fate.
+## ⛔ Blocked — hardware / on-target toolchain (not actionable before June 29)
+
+These need real silicon or a validated ESP-IDF build environment; do **not** change blind.
+
+| Task | Why blocked | Priority when unblocked |
+|------|-------------|-------------------------|
+| **H1** · Real camera driver (OV5640) on `SUDONIT_CAMERA_DRIVER` | needs the sensor | P0 |
+| **H2** · Real audio driver (MAX98357A I2S) on `SUDONIT_AUDIO_DRIVER` | needs the amp | P0 |
+| **H3** · Battery ADC (`battery_esp.c:16`) + mic I2S (`mic_esp.c:20`) | needs the board | P1 |
+| **H4** · Wi-Fi bring-up + brownout / power-stability test (#1 risk) | needs silicon | P0 |
+| **H5** · First real latency / battery / thermal numbers via the instrumented loop | needs silicon | P1 |
+| **H6** · Run eval harness against real Claude (`ANTHROPIC_API_KEY`) for real cost/quality | needs key (not HW) | P1 |
+| **H7** · ESP-IDF CI determinism: commit `dependencies.lock` + pin `esp32-camera` (manifest says "pin once verified on target") and confirm `idf.py build` is green in the container | needs a validated IDF toolchain; the job re-resolves `*` + recompiles esp32-camera every run today | P1 |
+| **H8** · After driver validation: collapse stub/real `#ifdef` branches (report A4), fold the dead demo capture path (A2), decide mic-HAL fate (A1), unify the IDF source list (A3) | removing stubs before drivers are proven breaks the default build | P2 |
+
+### Known unresolved risks (carried, not yet failures)
+- **`ai_response` > 8 KB** still exceeds the (heap, post-T1) 8192 cap → `SD_ERR_NO_MEM`.
+  Stub answers are short so it never fires in tests; a verbose real-Claude answer could.
+  Tracked under H6 (surfaces only with a real key) — raising the cap is a one-line change
+  then, with real payload sizes to size against.
+- **CI never executed on GitHub** — host + lint + esp-idf jobs are validated locally only;
+  first PR will be the real test (esp-idf-build most likely to fail first — see H7).
+- **`device.c text[1024]`** stack local is acceptable on 3584 B once T1 removes the 8 KB peak.
 
 ---
 
-## 🗂️ Repo-state hygiene
-- **Branches:** simplification + pre-hardware code lives on `repo-simplification`; the older
-  `interop-test-harness` and `docs-consolidation` were folded into it. Open one PR for
-  `repo-simplification` → `main` when ready (direct pushes to `main` are blocked by policy).
+## ✅ Done (verified, with commit)
 
----
+### Maintainer pass (this round)
+- **T1** (P0) · `sd_msg_recv` 8 KB stack buffer → heap — `f95da84`. Fixes the
+  guaranteed ESP32 main-task stack overflow on the first control-frame read once
+  `SUDONIT_RUN_UPLINK` runs on silicon. Behavior unchanged on host.
+- **T2** (P0) · double-`close()` of the same fd in robustness tests — `ac5a07d`.
+  Each fd now closed exactly once (EOF signaled via `sd_transport_close(w.b)`).
+- **T4** (P1) · regression test for the large-control-frame path — `4448f26`.
+  `test_recv_large_ai_response` drives a ~7 KB `ai_response` near the 8191-byte cap
+  through the heap buffer; locks T1 against silent regression.
+- **T5** (P2) · stale refs in `eval/run_eval.py` — `a423ddf`. Docstring/examples/
+  `--dataset` help corrected (`tools/camera_degrade.py`, `benchmarks/_source`).
+- **T6 + T7** (P3) · dangling doc refs — `109923b`. `CONTRIBUTING.md` MILESTONES.md →
+  ROADMAP.md; `DEVELOPMENT.md` `ai_benchmark.py` → `eval/run_eval.py`.
 
-## ✅ Done (verified)
-- **O2 · README rewrite / license fix** — license contradiction resolved on
-  `repo-simplification` (README now "Apache License 2.0 — see LICENSE").
-- **O3 · Docs consolidation (Phases 1–4)** — 71 → 22 active docs, `docs/` removed, no
-  information lost. Committed `bd50924`.
-- **O4 · Code-simplification cleanups** — all SAFE-NOW items (S1–S6) executed: dead
-  `simulator/` removed, `eval/`↔`tools/` duplication collapsed, unused protocol manifest
-  dropped. Committed `7b466bf`. See `SIMPLIFICATION_EXECUTION_LOG.md`.
-- **P1 · Automated interop test** — built and in-tree (`tests/test_firmware_interop.py`,
-  `firmware/test/run_interop.sh`).
-- Claude evaluation harness → `eval/` + `tests/test_eval_harness.py`, verified offline.
-- Founder-vision alignment, demo package, launch-readiness, website review → in `archive/`.
+### Earlier
+- Pre-hardware code queue A–G: CI host job `9ff4228`, robustness tests `d2c74a4`,
+  ESP-IDF CI `2551a1c`, uplink wiring `dd77d75`, latency instrumentation `2df7bf6`,
+  Makefile `3c2aa69`, lint `192a876`.
+- Simplification: dead-code/dup removal `7b466bf`, docs 71→22 `bd50924`, UX archive `69c1e4a`.
+- README license fix, interop test, eval harness, hostile self-review of the branch.
