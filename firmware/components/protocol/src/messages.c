@@ -83,14 +83,24 @@ sd_err_t sd_msg_recv(sd_transport_t *t, sd_msg_type_t *type_out, char *text_out,
         text_out[0] = '\0';
     }
 
-    uint8_t buf[8192];
+    /* Heap, not stack: the largest control frame is several KB and the ESP32
+     * main-task stack is only ~3.5 KB — an 8 KB stack buffer would overflow it.
+     * Matches the chunk-buffer policy used by the send/audio paths in this file. */
+    enum { SD_MSG_RECV_CAP = 8192 };
+    uint8_t *buf = malloc(SD_MSG_RECV_CAP);
+    if (!buf) {
+        return SD_ERR_NO_MEM;
+    }
+
     char kind = 0;
     size_t len = 0;
-    sd_err_t err = sd_frame_recv(t, &kind, buf, sizeof(buf) - 1, &len);
+    sd_err_t err = sd_frame_recv(t, &kind, buf, SD_MSG_RECV_CAP - 1, &len);
     if (err != SD_OK) {
+        free(buf);
         return err;
     }
     if (kind != SD_KIND_JSON) {
+        free(buf);
         return SD_ERR_IO; /* device does not expect inbound binary frames */
     }
     buf[len] = '\0';
@@ -98,6 +108,7 @@ sd_err_t sd_msg_recv(sd_transport_t *t, sd_msg_type_t *type_out, char *text_out,
 
     char type[32];
     if (sd_json_get_string(json, "type", type, sizeof(type)) != SD_OK) {
+        free(buf);
         return SD_ERR_IO;
     }
 
@@ -127,6 +138,7 @@ sd_err_t sd_msg_recv(sd_transport_t *t, sd_msg_type_t *type_out, char *text_out,
         sd_json_get_string(json, text_key, text_out, text_cap); /* best-effort */
     }
     if (type_out) *type_out = mtype;
+    free(buf);
     return SD_OK;
 }
 
