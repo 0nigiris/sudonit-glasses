@@ -12,7 +12,8 @@
 >
 > Status: ☐ open · ▶ in progress · ✅ done (commit) · ⛔ blocked (hardware/env)
 >
-> Last updated: 2026-06-22 — maintainer pass complete. **All P0/P1/P2/P3 tasks
+> Last updated: 2026-06-22 — independent verification pass. Found + fixed one
+> previously-missed **P0** (32-bit OOB write, T8). **All P0/P1/P2/P3 tasks now
 > done; only hardware/on-target-toolchain items remain (table below).**
 
 ---
@@ -42,6 +43,16 @@ These need real silicon or a validated ESP-IDF build environment; do **not** cha
 | **H8** · After driver validation: collapse stub/real `#ifdef` branches (report A4), fold the dead demo capture path (A2), decide mic-HAL fate (A1), unify the IDF source list (A3) | removing stubs before drivers are proven breaks the default build | P2 |
 
 ### Known unresolved risks (carried, not yet failures)
+- **Framing desync on oversize (latent, not currently reachable).** `sd_frame_recv`
+  returns `SD_ERR_NO_MEM` when `len > cap` *after* reading the 5-byte header but
+  *without* draining the `len` payload bytes — leaving the stream frame-misaligned.
+  Inspected and deliberately left unchanged: every caller (`sd_msg_recv` →
+  `sd_device_run_uplink`) treats any recv error as fatal and stops reading, and a
+  connection runs exactly one turn before close (`main_interop.c`, `app_main.c`), so
+  no caller ever reads after the error. It becomes a real bug only if a future caller
+  tries to "skip an oversized frame and continue" (e.g. recovering from a >8 KB
+  `ai_response`) — fix then is to drain `len` bytes before returning, with a stream-
+  recovery test. Not done now to avoid behavior change + complexity with no trigger.
 - **`ai_response` > 8 KB** still exceeds the (heap, post-T1) 8192 cap → `SD_ERR_NO_MEM`.
   Stub answers are short so it never fires in tests; a verbose real-Claude answer could.
   Tracked under H6 (surfaces only with a real key) — raising the cap is a one-line change
@@ -53,6 +64,17 @@ These need real silicon or a validated ESP-IDF build environment; do **not** cha
 ---
 
 ## ✅ Done (verified, with commit)
+
+### Independent verification pass (challenge "blocked", trust code only)
+- **T8** (P0) · 32-bit integer-overflow → out-of-bounds write in
+  `sd_msg_recv_audio_body` — *(commit below)*. The chunk-offset bounds check
+  computed `(size_t)seq * SD_CHUNK_SIZE`; `seq` is peer-controlled and `size_t`
+  is 32-bit on the ESP32, so `seq >= 2^20` wrapped the offset and defeated the
+  check → OOB `memcpy` on hardware. The 64-bit host never reproduced it (no wrap),
+  and the existing test used `seq=1000` (too small to wrap) — **false confidence**.
+  Fixed with `uint64_t` offset math; added `test_audio_body_seq_offset_overflow`.
+  *Why previously missed:* host is 64-bit; the bug is 32-bit-only and the test
+  seq was below the wrap threshold.
 
 ### Maintainer pass (this round)
 - **T1** (P0) · `sd_msg_recv` 8 KB stack buffer → heap — `f95da84`. Fixes the
