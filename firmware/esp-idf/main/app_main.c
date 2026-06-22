@@ -18,7 +18,13 @@
 #include "sudonit/log.h"
 #include "sudonit/provisioning.h"
 
-#ifdef SUDONIT_NET_SELFTEST
+/* The network data-plane code below is shared by two opt-in build flags:
+ *   SUDONIT_NET_SELFTEST - bring Wi-Fi up and exchange ping/pong (liveness).
+ *   SUDONIT_RUN_UPLINK   - bring Wi-Fi up and run the full capture->AI->audio
+ *                          turn via sd_device_run_uplink (the real V1 loop).
+ * Both reuse the same bring-up + bounded-retry connect; they differ only in what
+ * they do once connected. */
+#if defined(SUDONIT_NET_SELFTEST) || defined(SUDONIT_RUN_UPLINK)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -63,14 +69,17 @@ void app_main(void) {
 
     SD_LOGI(TAG, "boot complete — peripheral drivers are stubs pending hardware");
 
-#ifdef SUDONIT_NET_SELFTEST
-    /* Data-plane self-test: bring Wi-Fi up from the provisioned credentials,
-     * open a TCP connection to the phone server, and exchange ping/pong. This
-     * exercises net_esp + transport_wifi + the protocol layer end-to-end without
-     * needing the (still-stubbed) camera. Once the camera driver lands, swapping
-     * the ping for sd_device_run_uplink completes the full capture->AI loop with
-     * no change to the protocol layer. */
-    SD_LOGI(TAG, "net self-test: bringing up Wi-Fi (net backend=%s)", sd_net_backend());
+#if defined(SUDONIT_NET_SELFTEST) || defined(SUDONIT_RUN_UPLINK)
+    /* Data plane: bring Wi-Fi up from the provisioned credentials and open a TCP
+     * connection to the phone server. This exercises net_esp + transport_wifi +
+     * the protocol layer end-to-end. With SUDONIT_NET_SELFTEST we then exchange
+     * ping/pong (no camera needed); with SUDONIT_RUN_UPLINK we run the full
+     * capture->AI->audio turn — the same sd_device_run_uplink proven on the host
+     * interop build. Until the real camera driver is enabled
+     * (-DSUDONIT_CAMERA_DRIVER=1) the uplink's capture step returns
+     * SD_ERR_UNSUPPORTED and the turn ends there: the wiring is in place and
+     * compiled, so hardware day is flash-and-run rather than integrate. */
+    SD_LOGI(TAG, "data plane: bringing up Wi-Fi (net backend=%s)", sd_net_backend());
     if (sd_net_start(&cfg) != SD_OK) {
         SD_LOGE(TAG, "net self-test: Wi-Fi bring-up failed");
     } else if (cfg.server_host[0] == '\0') {
@@ -93,8 +102,22 @@ void app_main(void) {
             vTaskDelay(pdMS_TO_TICKS(1000 * attempt)); /* linear backoff */
         }
         if (terr != SD_OK) {
-            SD_LOGE(TAG, "net self-test: could not connect after retries");
+            SD_LOGE(TAG, "data plane: could not connect after retries");
         } else {
+#ifdef SUDONIT_RUN_UPLINK
+            /* Full V1 turn: capture -> stream to phone -> AI response -> play the
+             * audio downlink. Identical code path to the host interop build. */
+            char response[512];
+            sd_err_t uerr =
+                sd_device_run_uplink(t, "capture", response, sizeof(response));
+            if (uerr == SD_OK) {
+                SD_LOGI(TAG, "uplink: turn complete — response: %s", response);
+            } else {
+                SD_LOGE(TAG, "uplink: turn failed: %s (capture is stubbed until "
+                             "-DSUDONIT_CAMERA_DRIVER=1)",
+                        sd_strerror(uerr));
+            }
+#else
             sd_err_t perr = sd_msg_send_ping(t);
             sd_msg_type_t mtype = SD_MSG_UNKNOWN;
             if (perr == SD_OK) {
@@ -106,6 +129,7 @@ void app_main(void) {
                 SD_LOGE(TAG, "net self-test: no pong (%s, type=%d)",
                         sd_strerror(perr), (int)mtype);
             }
+#endif
             sd_transport_close(t);
         }
     }

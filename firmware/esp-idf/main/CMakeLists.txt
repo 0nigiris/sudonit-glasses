@@ -51,6 +51,12 @@ idf_component_register(
 if(SUDONIT_NET_SELFTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE SUDONIT_NET_SELFTEST=1)
 endif()
+# Run the full V1 capture->AI->audio turn on boot (sd_device_run_uplink) instead
+# of just ping/pong. Pair with -DSUDONIT_CAMERA_DRIVER=1 once the camera is wired:
+#   idf.py build -DSUDONIT_RUN_UPLINK=1 -DSUDONIT_CAMERA_DRIVER=1
+if(SUDONIT_RUN_UPLINK)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE SUDONIT_RUN_UPLINK=1)
+endif()
 if(SUDONIT_PROVISION_CONSOLE)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE SUDONIT_PROVISION_CONSOLE=1)
 endif()
