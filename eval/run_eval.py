@@ -1,20 +1,20 @@
 """CLI runner for the Claude evaluation harness.
 
 Runs the real AI provider path over a dataset of images — each image in one or
-more degradation variants (see eval/degrade.py) — and records, per request:
+more degradation variants (see tools/camera_degrade.py) — and records, per request:
 latency, input/output tokens, cost, and the answer. Writes a timestamped run
 under the benchmark directory as JSON, and prints median/p90 latency and average
 cost.
 
 Usage:
-    # real numbers (needs a key); all variants of every image in eval/dataset
+    # real numbers (needs a key); all variants of every image in benchmarks/_source
     ANTHROPIC_API_KEY=... python -m eval.run_eval
 
     # offline smoke run (stub provider): structure + latency only, no cost
     python -m eval.run_eval
 
     # choose variants, dataset, and output location
-    python -m eval.run_eval --dataset eval/dataset --out eval/benchmark \
+    python -m eval.run_eval --dataset benchmarks/_source --out eval/benchmark \
         --variants original,resize_800x600,jpeg,blur,low_light,combined
 
     # pin prices to the current rate card (USD per 1M tokens)
@@ -213,7 +213,7 @@ def main(argv: list[str] | None = None) -> Path:
     p = argparse.ArgumentParser(
         description="Evaluate the Sudonit AI provider over a dataset of images.")
     p.add_argument("--dataset", type=Path, default=DEFAULT_DATASET,
-                   help="folder of input images (default: eval/dataset)")
+                   help="folder of input images (default: benchmarks/_source)")
     p.add_argument("--out", type=Path, default=DEFAULT_OUT,
                    help="benchmark output directory (default: eval/benchmark)")
     p.add_argument("--variants", type=str, default=",".join(VARIANTS),
