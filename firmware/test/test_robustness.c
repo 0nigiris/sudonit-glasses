@@ -406,6 +406,30 @@ static void test_audio_body_out_of_range_seq(void) {
     wire_close(&w);
 }
 
+/* Guards the 64-bit offset math in sd_msg_recv_audio_body. seq = 2^20 makes
+ * seq * SD_CHUNK_SIZE (= 2^32) wrap to 0 in 32-bit size_t arithmetic — on the
+ * ESP32 the old code would have computed offset 0, passed the bounds check, and
+ * written the chunk to the wrong place. The destination buffer is deliberately
+ * larger than one chunk so a wrapped offset of 0 would *not* be caught by the
+ * size check alone; only honest 64-bit math rejects it. Must be SD_ERR_IO. */
+static void test_audio_body_seq_offset_overflow(void) {
+    struct wire w;
+    if (wire_open(&w) != 0) return;
+
+    uint8_t pcm[64];
+    for (size_t i = 0; i < sizeof(pcm); ++i) pcm[i] = (uint8_t)(i + 7);
+    char sha[65];
+    sd_sha256_hex(pcm, sizeof(pcm), sha);
+
+    send_chunk(w.b, 1u << 20, pcm, sizeof(pcm)); /* seq*4096 == 2^32 (wraps on 32-bit) */
+
+    uint8_t out[8192]; /* > one chunk, so a wrapped offset of 0 would fit */
+    CHECK(sd_msg_recv_audio_body(w.a, 1, sizeof(pcm), sha, out, sizeof(out)) ==
+              SD_ERR_IO,
+          "audio body rejects a sequence number that overflows 32-bit offset math");
+    wire_close(&w);
+}
+
 static void test_audio_body_size_mismatch(void) {
     struct wire w;
     if (wire_open(&w) != 0) return;
@@ -460,6 +484,7 @@ int main(void) {
     test_audio_body_chunk_corruption();
     test_audio_body_runt_chunk();
     test_audio_body_out_of_range_seq();
+    test_audio_body_seq_offset_overflow();
     test_audio_body_size_mismatch();
     test_audio_body_short_stream_times_out();
 
