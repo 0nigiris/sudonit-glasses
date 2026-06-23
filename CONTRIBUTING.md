@@ -7,16 +7,16 @@ This guide is intentionally short — it will grow as the project does.
 
 Read the project's source of truth, in this order:
 
-1. `MASTER.md` — the highest-level authority (overrides all other docs)
-2. `VISION.md`, `ARCHITECTURE.md`, `ROADMAP.md`
+1. `README.md` — why Sudonit exists, how it works, principles
+2. `ARCHITECTURE.md` — how the system is structured and why
 3. `PROTOCOL.md` + `protocol/TRANSPORT.md` — the communication contract
 4. `DECISIONS.md` — why things are the way they are
-5. `RUNNING.md` — how to run the prototype
+5. `DEVELOPMENT.md` — how to build, run, and test the prototype
 
-If a change contradicts `MASTER.md`, `MASTER.md` wins — or the change needs to
-update `MASTER.md` first, deliberately.
+If a change contradicts the principles in `README.md`, those principles win — or
+the change needs to update them first, deliberately.
 
-## Principles (from CLAUDE.md / MASTER.md)
+## Principles (from CLAUDE.md / README.md)
 
 - Prefer maintainability, readability, modularity, and documentation over clever
   code. If a simple solution works, use the simple solution.
@@ -33,8 +33,8 @@ update `MASTER.md` first, deliberately.
 4. **Document as you go.** If you add a protocol message, register it in
    `protocol/messages.py` (`KNOWN_TYPES`) **and** document it in `PROTOCOL.md`
    before implementing it — this rule is non-negotiable.
-5. **Update the docs you touch** — `ROADMAP.md`, `DECISIONS.md` (for notable
-   technical decisions), `MILESTONES.md` (for completed milestones).
+5. **Update the docs you touch** — `DECISIONS.md` (for notable technical
+   decisions) and any technical spec your change affects.
 
 ## Tests
 

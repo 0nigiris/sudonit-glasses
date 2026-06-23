@@ -21,6 +21,11 @@ class AIResult:
     text: str
     provider: str
     model: str
+    # Token accounting, when the backend reports it (the Anthropic API does;
+    # the offline stub does not). Left as None for providers that can't measure
+    # it, so cost/usage tooling can distinguish "zero" from "unknown".
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class AIProvider(abc.ABC):

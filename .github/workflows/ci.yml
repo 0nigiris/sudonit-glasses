@@ -1,0 +1,106 @@
+name: CI
+
+# Build and test on every push and pull request. Fails the run on any build
+# error or failing test, so a red check means "do not merge". No hardware and no
+# API key are required: the host build links the mock HAL backends and the tests
+# use the deterministic offline stub provider.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-build-and-test:
+    name: Host build + ctest + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install C toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
+
+      - name: Configure firmware host build
+        run: cmake -S firmware -B firmware/build
+
+      - name: Build firmware (host target, -Werror)
+        run: cmake --build firmware/build
+
+      - name: Run C unit tests (ctest)
+        run: ctest --test-dir firmware/build --output-on-failure
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run Python tests (pytest)
+        run: python -m pytest -q
+
+  lint:
+    name: Lint + static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: pip install ruff cppcheck
+
+      - name: Ruff (Python lint)
+        run: ruff check phone/ protocol/ eval/ tools/ tests/ firmware/
+
+      - name: cppcheck (C static analysis)
+        # Bug-finding levels (warning + portability). Vendored ESP-IDF managed
+        # components are excluded — only our own firmware sources are analyzed.
+        run: |
+          cppcheck --enable=warning,portability --error-exitcode=1 --inline-suppr \
+            --quiet --suppress=missingIncludeSystem \
+            --suppress=normalCheckLevelMaxBranches \
+            -I firmware/include -I firmware/components/protocol/include \
+            -I firmware/src/app \
+            firmware/src firmware/components/protocol firmware/test \
+            firmware/esp-idf/main/app_main.c
+
+  esp-idf-build:
+    name: ESP-IDF compile (esp32s3, no hardware)
+    runs-on: ubuntu-latest
+    # Official ESP-IDF image, pinned to the version in dependencies.lock (5.2).
+    # This is a compile-only check — `idf.py build` does not flash or need a board.
+    container:
+      image: espressif/idf:release-v5.2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build firmware (default stub backends)
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py -C firmware/esp-idf set-target esp32s3
+          idf.py -C firmware/esp-idf build
+
+      - name: Build firmware (full uplink loop wired)
+        # Compiles the SUDONIT_RUN_UPLINK + SUDONIT_NET_SELFTEST data-plane paths
+        # so the wired capture->AI->audio loop is proven to compile on-target,
+        # not just on the host.
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py -C firmware/esp-idf fullclean
+          idf.py -C firmware/esp-idf build -DSUDONIT_RUN_UPLINK=1 -DSUDONIT_NET_SELFTEST=1

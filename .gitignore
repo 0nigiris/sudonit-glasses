@@ -29,5 +29,19 @@ firmware/esp-idf/dependencies.lock
 .vscode/
 .idea/
 
-# Generated sample (regenerate with tools/make_sample_image.py)
-simulator/sample/sample.png
+# Internal product / planning / report docs — kept locally, not published to the
+# public repo (the repo ships code + technical specs only). See README for the
+# docs that remain public (PROTOCOL, ARCHITECTURE, HARDWARE, DECISIONS, etc.).
+/archive/
+/VISION.md
+/MVP.md
+/PRODUCT.md
+/ROADMAP.md
+/WEBSITE.md
+/DEMO_AND_LAUNCH.md
+/OPEN_TASKS.md
+/CODE_SIMPLIFICATION_REPORT.md
+/DOCS_CONSOLIDATION_PLAN.md
+/SIMPLIFICATION_EXECUTION_LOG.md
+
+output.txt

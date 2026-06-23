@@ -70,10 +70,37 @@ def encode_control(msg: dict) -> bytes:
 
 
 def decode_control(payload: bytes) -> dict:
-    msg = json.loads(payload.decode("utf-8"))
+    # A device on real Wi-Fi can emit a truncated, corrupted, or non-UTF-8 JSON
+    # frame; surface that as a ProtocolError (the one exception the server treats
+    # as "end this connection") instead of letting a raw ValueError/JSONDecodeError
+    # escape and crash the whole server.
+    try:
+        msg = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise framing.ProtocolError(f"malformed control JSON: {e}") from e
     if not isinstance(msg, dict) or "type" not in msg:
         raise framing.ProtocolError("control message missing 'type'")
     return msg
+
+
+def _require(begin: dict, key: str):
+    """Fetch a required control field, raising ProtocolError (not KeyError) when
+    a malformed peer omits it."""
+    if key not in begin:
+        raise framing.ProtocolError(f"control message missing required field {key!r}")
+    return begin[key]
+
+
+def _require_int(begin: dict, key: str) -> int:
+    """Fetch a required integer field; a non-numeric value from a malformed peer
+    becomes a ProtocolError rather than a later TypeError on range()/comparison."""
+    value = _require(begin, key)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise framing.ProtocolError(
+            f"field {key!r} must be an integer, got {value!r}"
+        ) from None
 
 
 def send_control(sock: socket.socket, msg: dict) -> None:
@@ -169,13 +196,13 @@ class AudioReassembler:
     """Receiver for one in-flight audio transfer (see ImageReassembler)."""
 
     def __init__(self, begin: dict):
-        self.audio_id: str = begin["audio_id"]
+        self.audio_id: str = _require(begin, "audio_id")
         self.audio_format: str = begin.get("format", "pcm_s16le")
-        self.sample_rate: int = begin["sample_rate"]
-        self.channels: int = begin["channels"]
-        self.expected_size: int = begin["size"]
-        self.expected_chunks: int = begin["chunks"]
-        self.expected_sha256: str = begin["sha256"]
+        self.sample_rate: int = _require_int(begin, "sample_rate")
+        self.channels: int = _require_int(begin, "channels")
+        self.expected_size: int = _require_int(begin, "size")
+        self.expected_chunks: int = _require_int(begin, "chunks")
+        self.expected_sha256: str = _require(begin, "sha256")
         self._chunks: dict[int, bytes] = {}
 
     def add_chunk(self, payload: bytes) -> None:
@@ -190,7 +217,10 @@ class AudioReassembler:
                 f"chunk count mismatch: got {len(self._chunks)}, "
                 f"expected {self.expected_chunks}"
             )
-        pcm = b"".join(self._chunks[i] for i in range(self.expected_chunks))
+        try:
+            pcm = b"".join(self._chunks[i] for i in range(self.expected_chunks))
+        except KeyError as e:
+            raise framing.ProtocolError(f"missing chunk seq {e.args[0]}") from None
         if len(pcm) != self.expected_size:
             raise framing.ProtocolError(
                 f"size mismatch: got {len(pcm)}, expected {self.expected_size}"
@@ -218,11 +248,11 @@ class ImageReassembler:
     """
 
     def __init__(self, begin: dict):
-        self.image_id: str = begin["image_id"]
+        self.image_id: str = _require(begin, "image_id")
         self.media_type: str = begin.get("media_type", "image/png")
-        self.expected_size: int = begin["size"]
-        self.expected_chunks: int = begin["chunks"]
-        self.expected_sha256: str = begin["sha256"]
+        self.expected_size: int = _require_int(begin, "size")
+        self.expected_chunks: int = _require_int(begin, "chunks")
+        self.expected_sha256: str = _require(begin, "sha256")
         self._chunks: dict[int, bytes] = {}
 
     def add_chunk(self, payload: bytes) -> None:
@@ -237,7 +267,10 @@ class ImageReassembler:
                 f"chunk count mismatch: got {len(self._chunks)}, "
                 f"expected {self.expected_chunks}"
             )
-        data = b"".join(self._chunks[i] for i in range(self.expected_chunks))
+        try:
+            data = b"".join(self._chunks[i] for i in range(self.expected_chunks))
+        except KeyError as e:
+            raise framing.ProtocolError(f"missing chunk seq {e.args[0]}") from None
         if len(data) != self.expected_size:
             raise framing.ProtocolError(
                 f"size mismatch: got {len(data)}, expected {self.expected_size}"

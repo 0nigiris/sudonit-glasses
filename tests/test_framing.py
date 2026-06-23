@@ -72,3 +72,110 @@ def test_corrupted_chunk_fails_checksum():
     reasm.add_chunk(struct.pack(">I", 0) + b"0123456789")
     with pytest.raises(framing.ProtocolError):
         reasm.finish()
+
+
+# --- Malformed-peer hardening -------------------------------------------------
+#
+# A device on real Wi-Fi can send a truncated, mistyped, or non-UTF-8 control
+# frame. The server only treats framing.ProtocolError as "end this connection";
+# any other exception escaping the reassembler crashes the whole server. These
+# tests pin every malformed-input path to ProtocolError so that boundary holds.
+
+
+@pytest.mark.parametrize("missing", ["image_id", "size", "chunks", "sha256"])
+def test_image_begin_missing_field_raises_protocol_error(missing):
+    begin = {
+        "type": "image_begin",
+        "image_id": "x",
+        "size": 10,
+        "chunks": 1,
+        "sha256": "0" * 64,
+        "media_type": "image/png",
+    }
+    del begin[missing]
+    with pytest.raises(framing.ProtocolError):
+        messages.ImageReassembler(begin)
+
+
+@pytest.mark.parametrize("missing", ["audio_id", "sample_rate", "channels", "size", "chunks", "sha256"])
+def test_audio_begin_missing_field_raises_protocol_error(missing):
+    begin = {
+        "type": "audio_begin",
+        "audio_id": "a",
+        "sample_rate": 16000,
+        "channels": 1,
+        "size": 10,
+        "chunks": 1,
+        "sha256": "0" * 64,
+    }
+    del begin[missing]
+    with pytest.raises(framing.ProtocolError):
+        messages.AudioReassembler(begin)
+
+
+def test_image_begin_non_integer_size_raises_protocol_error():
+    begin = {
+        "type": "image_begin",
+        "image_id": "x",
+        "size": "not-a-number",
+        "chunks": 1,
+        "sha256": "0" * 64,
+    }
+    with pytest.raises(framing.ProtocolError):
+        messages.ImageReassembler(begin)
+
+
+def test_image_finish_wrong_seq_raises_protocol_error():
+    # Right chunk *count* but the wrong seq number: range(expected_chunks) would
+    # KeyError without the guard. Must surface as ProtocolError, not crash.
+    import struct
+
+    begin = {
+        "type": "image_begin",
+        "image_id": "x",
+        "size": 10,
+        "chunks": 1,
+        "sha256": "0" * 64,
+    }
+    reasm = messages.ImageReassembler(begin)
+    reasm.add_chunk(struct.pack(">I", 7) + b"0123456789")  # seq 7, not 0
+    with pytest.raises(framing.ProtocolError):
+        reasm.finish()
+
+
+def test_audio_finish_wrong_seq_raises_protocol_error():
+    import struct
+
+    begin = {
+        "type": "audio_begin",
+        "audio_id": "a",
+        "sample_rate": 16000,
+        "channels": 1,
+        "size": 10,
+        "chunks": 1,
+        "sha256": "0" * 64,
+    }
+    reasm = messages.AudioReassembler(begin)
+    reasm.add_chunk(struct.pack(">I", 7) + b"0123456789")  # seq 7, not 0
+    with pytest.raises(framing.ProtocolError):
+        reasm.finish()
+
+
+def test_decode_control_bad_json_raises_protocol_error():
+    with pytest.raises(framing.ProtocolError):
+        messages.decode_control(b"{not valid json")
+
+
+def test_decode_control_non_utf8_raises_protocol_error():
+    with pytest.raises(framing.ProtocolError):
+        messages.decode_control(b"\xff\xfe\xfd")
+
+
+def test_decode_control_missing_type_raises_protocol_error():
+    with pytest.raises(framing.ProtocolError):
+        messages.decode_control(b'{"no_type": 1}')
+
+
+def test_decode_control_non_object_raises_protocol_error():
+    with pytest.raises(framing.ProtocolError):
+        messages.decode_control(b"[1, 2, 3]")

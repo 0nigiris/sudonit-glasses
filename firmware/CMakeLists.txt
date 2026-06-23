@@ -80,6 +80,13 @@ add_executable(test_protocol test/test_protocol.c)
 target_link_libraries(test_protocol sudonit_fw Threads::Threads)
 add_test(NAME protocol COMMAND test_protocol)
 
+# Adversarial inputs: malformed/truncated/oversized frames, corrupted chunks,
+# bad hashes — the protocol layer must reject them with a defined error, never
+# hang or over-read. Complements the happy-path coverage in test_protocol.
+add_executable(test_robustness test/test_robustness.c)
+target_link_libraries(test_robustness sudonit_fw)
+add_test(NAME robustness COMMAND test_robustness)
+
 add_executable(test_config test/test_config.c)
 target_link_libraries(test_config sudonit_fw)
 add_test(NAME config COMMAND test_config)

@@ -18,6 +18,13 @@
 #include "sudonit/hal/transport.h"
 #include "sudonit/log.h"
 
+/* Host-mock diagnostic hook: how many PCM frames the firmware actually pushed
+ * through the audio HAL. Defined in src/hal/mock/audio_mock.c and present only
+ * in the host build (the esp32 build links audio_esp.c, which has no such hook).
+ * Printed below as machine-readable evidence that the full turn — including the
+ * audio downlink — completed, so an automated test can assert on it. */
+extern size_t sd_audio_mock_frames_played(void);
+
 int main(int argc, char **argv) {
     sd_log_set_level(SD_LOG_INFO);
 
@@ -43,7 +50,9 @@ int main(int argc, char **argv) {
     }
 
     char response[1024];
-    sd_err_t err = sd_device_run_uplink(t, "capture", response, sizeof(response));
+    sd_uplink_metrics_t metrics = {0};
+    sd_err_t err =
+        sd_device_run_uplink(t, "capture", response, sizeof(response), &metrics);
     sd_transport_close(t);
 
     if (err != SD_OK) {
@@ -52,5 +61,18 @@ int main(int argc, char **argv) {
     }
 
     printf("PHONE RESPONSE: %s\n", response);
+    /* Machine-readable evidence for the automated interop test: the turn drove
+     * the camera -> protocol -> phone -> AI -> audio path to completion, and
+     * this many PCM frames were played back through the (mock) audio HAL. */
+    printf("[interop] audio_frames=%zu\n", sd_audio_mock_frames_played());
+    /* Per-stage latency + sizes for the turn (one machine-readable line). On the
+     * host the absolute numbers are dominated by the in-process stub; the value
+     * is the same instrumentation running unchanged on hardware (real Wi-Fi + AI)
+     * to produce the first real latency budget. */
+    printf("[interop] capture_ms=%u upload_ms=%u response_ms=%u total_ms=%u "
+           "image_bytes=%zu response_bytes=%zu\n",
+           (unsigned)metrics.capture_ms, (unsigned)metrics.upload_ms,
+           (unsigned)metrics.response_ms, (unsigned)metrics.total_ms,
+           metrics.image_bytes, metrics.response_bytes);
     return 0;
 }
