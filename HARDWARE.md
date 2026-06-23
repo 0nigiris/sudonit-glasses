@@ -3,7 +3,7 @@
 > Board resources, bring-up procedures, provisioning, and external references.
 >
 > Consolidated document — built by merging the sources below verbatim under
-> labeled dividers (no information removed). See DOCS_CONSOLIDATION_PLAN.md.
+> labeled dividers (no information removed).
 
 
 ---
@@ -131,7 +131,7 @@ TP4056 USB-C charger · 502080 1000mAh battery.
 ## Guiding principle
 
 By the time hardware arrives, every subsystem above the hardware line should
-already exist, be tested, and be documented (see PRE_HARDWARE_ROADMAP.md). The
+already exist, be tested, and be documented. The
 remaining work is to implement each real driver **behind an interface that
 already exists** — the Hardware Abstraction Layer (HAL). Integration is then
 "swap a mock for a real driver," one peripheral at a time, not "build the

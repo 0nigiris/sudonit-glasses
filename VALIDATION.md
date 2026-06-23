@@ -3,7 +3,7 @@
 > Assumptions, risks, failure modes, and the evidence/metrics that turn beliefs into facts.
 >
 > Consolidated document — built by merging the sources below verbatim under
-> labeled dividers (no information removed). See DOCS_CONSOLIDATION_PLAN.md.
+> labeled dividers (no information removed).
 
 
 ---

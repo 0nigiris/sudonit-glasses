@@ -3,7 +3,7 @@
 > How to build, run, test, and contribute to Sudonit, plus the pre-hardware work plan.
 >
 > Consolidated document — built by merging the sources below verbatim under
-> labeled dividers (no information removed). See DOCS_CONSOLIDATION_PLAN.md.
+> labeled dividers (no information removed).
 
 
 ---

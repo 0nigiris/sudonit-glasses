@@ -439,7 +439,7 @@ explains the assistant is unavailable — the device fails gracefully, never bla
 
 **Future expansion:** voice question (mic), conversational follow-ups, on-device wake
 word (privacy-gated, later), proactive suggestions, translation/transcription surfaces
-(UX Concepts C/D), pluggable providers (your key, your model — VISION.md).
+(UX Concepts C/D), pluggable providers (your key, your model — see README).
 
 ---
 
@@ -452,7 +452,7 @@ word (privacy-gated, later), proactive suggestions, translation/transcription su
 - **New apps are additive**: register a screen + (optionally) a service/store; the
   launcher, navigation, settings, and rendering are reused unchanged. This is the payoff
   of the layered runtime and the reason the built-in set can grow toward the V2/V3
-  feature list (PRODUCT_VISION.md) without architectural churn.
+  feature list without architectural churn.
 
 
 ---
@@ -462,7 +462,7 @@ word (privacy-gated, later), proactive suggestions, translation/transcription su
 # FRAME_ARCHITECTURE.md
 
 The physical architecture — where the parts go and why. Grounded in Sudonit's
-defining constraint (VISION.md): **a clip-on module that attaches to glasses the user
+defining constraint (see README): **a clip-on module that attaches to glasses the user
 already owns**, not a custom frame. That single decision drives weight, balance,
 cable routing, and repairability more than any other.
 
@@ -584,7 +584,7 @@ user-handled object — the most likely mechanical failure point.
 
 ## 6. Future repairability (a V1 habit, a V2 promise)
 
-Repairability is a core value (VISION.md), and it's cheapest to honor by *designing
+Repairability is a core value (see README), and it's cheapest to honor by *designing
 for it from V1* rather than retrofitting:
 
 - **Modules, not a monolith** — the FRAME maps to three separable units: **camera
